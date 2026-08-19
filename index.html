@@ -305,13 +305,12 @@ function renderDashboard(){
     return d>=0 && d<=7;
   });
   const now = new Date();
-  const monthPrefix = todayISO().slice(0,7);
-  const collectedThisMonth = payments.filter(p=>p.paidDate && p.paidDate.slice(0,7)===monthPrefix)
+  const totalAbonado = payments.filter(p=>p.paidDate)
     .reduce((s,p)=>s+Number(p.amount||0),0);
 
   let html = `<div class="stat-grid">
     <div class="stat-card"><div class="label">Clientes</div><div class="value">${DATA.clients.length}</div></div>
-    <div class="stat-card ok"><div class="label">Cobrado este mes</div><div class="value" style="font-size:1.05rem">${fmtMoney(collectedThisMonth)}</div></div>
+    <div class="stat-card ok"><div class="label">Total abonado</div><div class="value" style="font-size:1.05rem">${fmtMoney(totalAbonado)}</div></div>
     <div class="stat-card danger"><div class="label">Pagos vencidos</div><div class="value">${overdue.length}</div></div>
     <div class="stat-card warn"><div class="label">Vencen en 7 días</div><div class="value">${upcoming.length}</div></div>
   </div>`;
@@ -515,6 +514,7 @@ function renderClientDetail(id){
       <div>
         <h2>${escapeHtml(c.name)}</h2>
         <div class="muted">${escapeHtml(c.property||"Sin propiedad asignada")}</div>
+        ${(c.cedula||c.ruc) ? `<div class="muted" style="font-size:.78rem;margin-top:2px;">${c.cedula? `CI: ${escapeHtml(c.cedula)}`:""}${(c.cedula&&c.ruc)? " · ":""}${c.ruc? `RUC: ${escapeHtml(c.ruc)}`:""}</div>` : ""}
       </div>
     </div>
     <div class="contact-row">
@@ -573,13 +573,17 @@ function renderClientDetail(id){
 /* ---------- Forms: Client ---------- */
 function openClientForm(id){
   const editing = !!id;
-  const c = editing ? getClient(id) : {name:"",phone:"",email:"",property:"",notes:""};
+  const c = editing ? getClient(id) : {name:"",phone:"",email:"",property:"",cedula:"",ruc:"",notes:""};
   const html = `
     <h2>${editing? "Editar cliente":"Nuevo cliente"}</h2>
     <div class="field"><label>Nombre completo *</label><input id="f_name" value="${escapeAttr(c.name)}" placeholder="Ej: Juan Pérez"></div>
     <div class="field-row">
       <div class="field"><label>Teléfono</label><input id="f_phone" value="${escapeAttr(c.phone||"")}" placeholder="0981 123 456" inputmode="tel"></div>
       <div class="field"><label>Email</label><input id="f_email" value="${escapeAttr(c.email||"")}" placeholder="correo@ejemplo.com" inputmode="email"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>N° Cédula</label><input id="f_cedula" value="${escapeAttr(c.cedula||"")}" placeholder="Ej: 3.456.789" inputmode="numeric"></div>
+      <div class="field"><label>RUC</label><input id="f_ruc" value="${escapeAttr(c.ruc||"")}" placeholder="Ej: 3456789-1"></div>
     </div>
     <div class="field"><label>Propiedad</label><input id="f_property" value="${escapeAttr(c.property||"")}" placeholder="Ej: Depto 3B, Barrio Villa Morra"></div>
     <div class="field-row">
@@ -601,6 +605,8 @@ function openClientForm(id){
       name,
       phone: document.getElementById("f_phone").value.trim(),
       email: document.getElementById("f_email").value.trim(),
+      cedula: document.getElementById("f_cedula").value.trim(),
+      ruc: document.getElementById("f_ruc").value.trim(),
       property: document.getElementById("f_property").value.trim(),
       totalProperty: Number(document.getElementById("f_total").value) || 0,
       installments: Number(document.getElementById("f_installments").value) || 0,
