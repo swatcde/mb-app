@@ -145,7 +145,7 @@
 </style>
 </head>
 <body>
-<div id="app">
+<div id="app" style="display:none;">
   <header class="top">
     <h1 id="headerTitle"><img id="brandImg" alt="MB Emprendimientos" style="width:26px;height:26px;border-radius:7px;object-fit:cover;vertical-align:-7px;margin-right:7px;"> MB Emprendimientos</h1>
     <button class="icon-btn" id="bellBtn" title="Activar notificaciones">🔔</button>
@@ -162,6 +162,33 @@
   </nav>
 </div>
 
+<div class="modal-backdrop center" id="authOverlay" style="display:none;">
+  <div class="modal" style="max-width:360px;">
+    <div style="text-align:center;margin-bottom:10px;">
+      <img id="authBrandImg" alt="" style="width:44px;height:44px;border-radius:10px;object-fit:cover;">
+    </div>
+    <h2 style="text-align:center;">MB Emprendimientos</h2>
+    <p style="text-align:center;color:var(--text-muted);font-size:.82rem;margin-top:-8px;margin-bottom:16px;">Ingresá para sincronizar tus datos en la nube</p>
+    <div class="field">
+      <label>Correo electrónico</label>
+      <input type="email" id="authEmail" autocomplete="email" placeholder="tu@correo.com">
+    </div>
+    <div class="field">
+      <label>Contraseña</label>
+      <input type="password" id="authPassword" autocomplete="current-password" placeholder="••••••">
+    </div>
+    <div id="authError" style="color:var(--danger);font-size:.8rem;min-height:16px;margin-bottom:4px;"></div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="authRegisterBtn" type="button">Crear cuenta</button>
+      <button class="btn primary" id="authLoginBtn" type="button">Ingresar</button>
+    </div>
+    <button class="btn ghost block" id="authForgotBtn" type="button" style="font-size:.78rem;margin-top:6px;">¿Olvidaste tu contraseña?</button>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
 <script>
 (function(){
 "use strict";
@@ -175,10 +202,179 @@ function loadData(){
   }catch(e){}
   return { clients: [], settings: { currency: "PYG", reminderDays: 3 } };
 }
-function saveData(){ localStorage.setItem(STORE_KEY, JSON.stringify(DATA)); }
+function saveData(){
+  localStorage.setItem(STORE_KEY, JSON.stringify(DATA));
+  pushToCloud();
+}
 let DATA = loadData();
 if(!DATA.settings) DATA.settings = { currency: "PYG", reminderDays: 3 };
 if(DATA.settings.reminderDays === undefined) DATA.settings.reminderDays = 3;
+
+/* ---------- Cloud sync (Firebase) ---------- */
+const firebaseConfig = {
+  apiKey: "AIzaSyAXnKn8K3l0dfz-fXfYjOuA9JquSVJhXqM",
+  authDomain: "mb-emprendimientos.firebaseapp.com",
+  projectId: "mb-emprendimientos",
+  storageBucket: "mb-emprendimientos.firebasestorage.app",
+  messagingSenderId: "344128736987",
+  appId: "1:344128736987:web:1ee42dc9f8330218e706fe"
+};
+let cloudReady = false;
+let fbAuth = null, fbDb = null;
+try{
+  if(window.firebase){
+    firebase.initializeApp(firebaseConfig);
+    fbAuth = firebase.auth();
+    fbDb = firebase.firestore();
+    fbDb.enablePersistence({ synchronizeTabs: true }).catch(()=>{});
+    cloudReady = true;
+  }
+}catch(e){ console.warn("No se pudo iniciar Firebase", e); }
+
+let currentUser = null;
+let cloudSaveTimer = null;
+let unsubscribeSnapshot = null;
+let syncState = "offline"; // offline | syncing | synced | error
+
+function userDocRef(){ return fbDb.collection("users").doc(currentUser.uid); }
+
+// Evita que datos locales de OTRA cuenta usada antes en este dispositivo "contaminen"
+// la nube de una cuenta nueva. Solo migramos datos locales existentes la primera vez
+// que este dispositivo sincroniza con la nube.
+function seedCloudDoc(){
+  const already = localStorage.getItem("inmobiliariaApp_cloudMigrated");
+  const seed = already ? { clients: [], settings: DATA.settings || { currency:"PYG", reminderDays:3 } } : DATA;
+  return userDocRef().set(seed).then(()=>{
+    localStorage.setItem("inmobiliariaApp_cloudMigrated","1");
+    if(already){
+      DATA = seed;
+      localStorage.setItem(STORE_KEY, JSON.stringify(DATA));
+      render();
+    }
+  });
+}
+
+function setSyncState(s){
+  syncState = s;
+  if(currentTab === "config") renderSyncStatus();
+}
+
+function pushToCloud(){
+  if(!cloudReady || !currentUser) return;
+  clearTimeout(cloudSaveTimer);
+  setSyncState("syncing");
+  cloudSaveTimer = setTimeout(()=>{
+    userDocRef().set(DATA)
+      .then(()=> setSyncState("synced"))
+      .catch(err=>{ console.warn("Error al sincronizar", err); setSyncState("error"); });
+  }, 500);
+}
+
+function startCloudSync(){
+  if(!cloudReady || !currentUser) return;
+  if(unsubscribeSnapshot) unsubscribeSnapshot();
+  unsubscribeSnapshot = userDocRef().onSnapshot({ includeMetadataChanges:true }, doc=>{
+    if(doc.metadata.hasPendingWrites) return; // eco de nuestra propia escritura, ignorar
+    if(!doc.exists){
+      seedCloudDoc().catch(()=>{});
+      return;
+    }
+    const remote = doc.data();
+    DATA = remote;
+    if(!DATA.settings) DATA.settings = { currency: "PYG", reminderDays: 3 };
+    if(DATA.settings.reminderDays === undefined) DATA.settings.reminderDays = 3;
+    localStorage.setItem(STORE_KEY, JSON.stringify(DATA));
+    setSyncState("synced");
+    render();
+  }, err=>{ console.warn("Error de sincronización", err); setSyncState("error"); });
+}
+
+function stopCloudSync(){
+  if(unsubscribeSnapshot){ unsubscribeSnapshot(); unsubscribeSnapshot = null; }
+}
+
+function friendlyAuthError(code){
+  const map = {
+    "auth/invalid-email": "Correo inválido.",
+    "auth/user-not-found": "No existe una cuenta con ese correo.",
+    "auth/wrong-password": "Contraseña incorrecta.",
+    "auth/invalid-credential": "Correo o contraseña incorrectos.",
+    "auth/email-already-in-use": "Ya existe una cuenta con ese correo.",
+    "auth/weak-password": "La contraseña debe tener al menos 6 caracteres.",
+    "auth/network-request-failed": "Sin conexión a internet.",
+    "auth/too-many-requests": "Demasiados intentos. Probá de nuevo más tarde.",
+    "auth/missing-password": "Escribí una contraseña."
+  };
+  return map[code] || "Ocurrió un error. Intentá de nuevo.";
+}
+
+const appEl = document.getElementById("app");
+const authOverlay = document.getElementById("authOverlay");
+function showAuthOverlay(show){
+  authOverlay.style.display = show ? "flex" : "none";
+  appEl.style.display = show ? "none" : "flex";
+}
+function authSetError(msg){ const el = document.getElementById("authError"); if(el) el.textContent = msg || ""; }
+
+if(cloudReady){
+  document.getElementById("authBrandImg").src = document.querySelector('link[rel="icon"]').href;
+
+  document.getElementById("authLoginBtn").addEventListener("click", async ()=>{
+    const email = document.getElementById("authEmail").value.trim();
+    const pass = document.getElementById("authPassword").value;
+    if(!email || !pass){ authSetError("Completá correo y contraseña."); return; }
+    authSetError("Ingresando...");
+    try{ await fbAuth.signInWithEmailAndPassword(email, pass); }
+    catch(e){ authSetError(friendlyAuthError(e.code)); }
+  });
+  document.getElementById("authRegisterBtn").addEventListener("click", async ()=>{
+    const email = document.getElementById("authEmail").value.trim();
+    const pass = document.getElementById("authPassword").value;
+    if(!email || !pass){ authSetError("Completá correo y contraseña."); return; }
+    if(pass.length < 6){ authSetError("La contraseña debe tener al menos 6 caracteres."); return; }
+    authSetError("Creando cuenta...");
+    try{ await fbAuth.createUserWithEmailAndPassword(email, pass); }
+    catch(e){ authSetError(friendlyAuthError(e.code)); }
+  });
+  document.getElementById("authForgotBtn").addEventListener("click", async ()=>{
+    const email = document.getElementById("authEmail").value.trim();
+    if(!email){ authSetError("Escribí tu correo arriba para enviarte el enlace."); return; }
+    try{ await fbAuth.sendPasswordResetEmail(email); authSetError("Te enviamos un enlace a tu correo ✓"); }
+    catch(e){ authSetError(friendlyAuthError(e.code)); }
+  });
+
+  fbAuth.onAuthStateChanged(async user=>{
+    currentUser = user;
+    if(user){
+      authSetError("");
+      document.getElementById("authEmail").value = "";
+      document.getElementById("authPassword").value = "";
+      try{
+        const snap = await userDocRef().get();
+        if(snap.exists){
+          const remote = snap.data();
+          DATA = remote;
+          if(!DATA.settings) DATA.settings = { currency: "PYG", reminderDays: 3 };
+          if(DATA.settings.reminderDays === undefined) DATA.settings.reminderDays = 3;
+          localStorage.setItem(STORE_KEY, JSON.stringify(DATA));
+        } else {
+          await seedCloudDoc();
+        }
+        setSyncState("synced");
+      }catch(e){ console.warn("Error al cargar datos de la nube", e); setSyncState("error"); }
+      showAuthOverlay(false);
+      startCloudSync();
+      render();
+      maybeShowIntro();
+    } else {
+      stopCloudSync();
+      showAuthOverlay(true);
+    }
+  });
+} else {
+  // Firebase no disponible (bloqueado, sin conexión al cargar, etc.): la app sigue funcionando localmente.
+  showAuthOverlay(false);
+}
 
 /* ---------- Helpers ---------- */
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
@@ -405,8 +601,34 @@ function renderPagos(){
   bindPaymentCards();
 }
 
+function syncStatusText(){
+  if(!cloudReady) return { icon:"⚪", label:"Sin conexión a la nube" };
+  if(!currentUser) return { icon:"⚪", label:"Sin sesión" };
+  if(syncState==="syncing") return { icon:"🟡", label:"Sincronizando…" };
+  if(syncState==="error") return { icon:"🔴", label:"Error al sincronizar" };
+  return { icon:"🟢", label:"Sincronizado" };
+}
+function renderSyncStatus(){
+  const el = document.getElementById("syncStatusLbl");
+  if(!el) return;
+  const s = syncStatusText();
+  el.textContent = `${s.icon} ${s.label}`;
+}
 function renderConfig(){
+  const s = syncStatusText();
   main.innerHTML = `
+  ${cloudReady && currentUser ? `
+  <div class="section-title">Cuenta</div>
+  <div class="settings-group">
+    <div class="settings-row">
+      <div><div class="lbl">Sesión iniciada</div><div class="desc">${escapeHtml(currentUser.email||"")}</div></div>
+      <button class="btn ghost" style="flex:none;padding:8px 14px;" id="logoutBtn">Salir</button>
+    </div>
+    <div class="settings-row">
+      <div><div class="lbl">Sincronización en la nube</div><div class="desc" id="syncStatusLbl">${s.icon} ${s.label}</div></div>
+    </div>
+  </div>
+  ` : ""}
   <div class="settings-group">
     <div class="settings-row">
       <div><div class="lbl">Moneda</div><div class="desc">Cómo se muestran los montos</div></div>
@@ -445,7 +667,9 @@ function renderConfig(){
     <button class="btn danger block" id="clearBtn">🗑️ Borrar todos los datos</button>
   </div>
   <div class="empty" style="text-align:left;">
-    ℹ️ Esta app guarda tus datos en este dispositivo (celular o compu), no en internet. Para ver los mismos clientes en otro dispositivo, exportá una copia acá e importala allá. Podés repetir esto cada vez que quieras mantenerlos sincronizados.
+    ${cloudReady && currentUser
+      ? "ℹ️ Tus datos se sincronizan automáticamente con la nube mientras tengas sesión iniciada. Entrá con la misma cuenta en otro dispositivo para ver los mismos clientes. El botón de exportar sigue disponible como respaldo extra."
+      : "ℹ️ Esta app guarda tus datos en este dispositivo (celular o compu). Para ver los mismos clientes en otro dispositivo, exportá una copia acá e importala allá, o iniciá sesión para sincronizar automáticamente por la nube."}
   </div>
   `;
   document.getElementById("currencySel").addEventListener("change", e=>{ DATA.settings.currency=e.target.value; saveData(); toast("Moneda actualizada"); });
@@ -454,6 +678,12 @@ function renderConfig(){
   document.getElementById("exportBtn").addEventListener("click", exportData);
   document.getElementById("importBtn").addEventListener("click", ()=> document.getElementById("importFile").click());
   document.getElementById("importFile").addEventListener("change", importData);
+  const logoutBtn = document.getElementById("logoutBtn");
+  if(logoutBtn) logoutBtn.addEventListener("click", ()=>{
+    openConfirm("¿Cerrar sesión?", "Vas a dejar de ver la sincronización automática en este dispositivo hasta que vuelvas a ingresar.", ()=>{
+      fbAuth.signOut();
+    });
+  });
   document.getElementById("clearBtn").addEventListener("click", ()=>{
     openConfirm("¿Borrar todos los datos?", "Esta acción no se puede deshacer. Se eliminarán todos los clientes y pagos guardados en este dispositivo.", ()=>{
       DATA = { clients: [], settings: DATA.settings };
@@ -732,15 +962,18 @@ function escapeHtml(str){
 function escapeAttr(str){ return escapeHtml(str); }
 
 /* ---------- Init ---------- */
-render();
+function maybeShowIntro(){
+  if(DATA.clients.length===0 && !localStorage.getItem("inmobiliariaApp_seenIntro")){
+    localStorage.setItem("inmobiliariaApp_seenIntro","1");
+    setTimeout(()=> toast("Bienvenido 👋 Tocá + para agregar tu primer cliente"), 500);
+  }
+}
+if(!cloudReady){
+  render();
+  maybeShowIntro();
+}
 checkNotifications();
 setInterval(checkNotifications, 1000*60*30);
-
-/* Seed a bit of guidance the very first time */
-if(DATA.clients.length===0 && !localStorage.getItem("inmobiliariaApp_seenIntro")){
-  localStorage.setItem("inmobiliariaApp_seenIntro","1");
-  setTimeout(()=> toast("Bienvenido 👋 Tocá + para agregar tu primer cliente"), 500);
-}
 
 })();
 
