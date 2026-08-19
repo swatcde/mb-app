@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>MB Emprendimientos — Mis Clientes</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20100%20100%22%3E%3Crect%20width%3D%22100%22%20height%3D%22100%22%20rx%3D%2220%22%20fill%3D%22%232b2420%22/%3E%3Ctext%20x%3D%2250%22%20y%3D%2245%22%20font-size%3D%2234%22%20text-anchor%3D%22middle%22%20fill%3D%22%23c9a24a%22%20font-family%3D%22Georgia%2Cserif%22%20font-weight%3D%22bold%22%3EMB%3C/text%3E%3Ctext%20x%3D%2250%22%20y%3D%2278%22%20font-size%3D%2212%22%20text-anchor%3D%22middle%22%20fill%3D%22%23e7d5a8%22%20font-family%3D%22Arial%2Csans-serif%22%20letter-spacing%3D%221%22%3EEMPRENDIMIENTOS%3C/text%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20100%20100%22%3E%3Crect%20width%3D%22100%22%20height%3D%22100%22%20rx%3D%2220%22%20fill%3D%22%232b2420%22/%3E%3Ctext%20x%3D%2250%22%20y%3D%2245%22%20font-size%3D%2234%22%20text-anchor%3D%22middle%22%20fill%3D%22%23c9a24a%22%20font-family%3D%22Georgia%2Cserif%22%20font-weight%3D%22bold%22%3EMB%3C/text%3E%3Ctext%20x%3D%2250%22%20y%3D%2278%22%20font-size%3D%2212%22%20text-anchor%3D%22middle%22%20fill%3D%22%23e7d5a8%22%20font-family%3D%22Arial%2Csans-serif%22%20letter-spacing%3D%221%22%3EEMPRENDIMIENTOS%3C/text%3E%3C/svg%3E">
+<link rel="manifest" href="manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#221f1a">
+<style>
+  :root{
+    --bg:#f4f6f6;
+    --surface:#ffffff;
+    --surface-2:#eef2f2;
+    --border:#dbe3e3;
+    --text:#132022;
+    --text-muted:#5c6e70;
+    --primary:#2b2420;
+    --primary-dark:#181310;
+    --primary-tint:#f3e9d2;
+    --gold:#b6892f;
+    --danger:#b3432b;
+    --danger-tint:#fbeae5;
+    --warn:#a5760f;
+    --warn-tint:#faf1de;
+    --ok:#2f7a4f;
+    --ok-tint:#e7f4ec;
+    --radius:14px;
+    --shadow:0 1px 2px rgba(15,30,32,.06), 0 4px 14px rgba(15,30,32,.06);
+    font-size:16px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#0f1516;
+      --surface:#182223;
+      --surface-2:#1e2a2b;
+      --border:#2b3839;
+      --text:#eef3f3;
+      --text-muted:#9fb0b1;
+      --primary:#c9a24a;
+      --primary-dark:#a8843a;
+      --primary-tint:#2c2418;
+      --gold:#d9b45f;
+      --danger:#e2836a;
+      --danger-tint:#2e1c17;
+      --warn:#e0b45c;
+      --warn-tint:#2e2515;
+      --ok:#79d19a;
+      --ok-tint:#132a1c;
+    }
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  #app{max-width:560px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;padding-bottom:78px;}
+
+  header.top{position:sticky;top:0;z-index:20;background:var(--primary);color:#fff;padding:14px 18px calc(14px + env(safe-area-inset-top,0px));padding-top:calc(14px + env(safe-area-inset-top,0px));display:flex;align-items:center;justify-content:space-between;}
+  header.top h1{font-size:1.05rem;margin:0;font-weight:700;display:flex;align-items:center;gap:8px;}
+  header.top .sub{font-size:.72rem;opacity:.85;font-weight:400;}
+  .icon-btn{background:rgba(255,255,255,.15);border:none;color:#fff;width:36px;height:36px;border-radius:10px;font-size:1.1rem;display:flex;align-items:center;justify-content:center;cursor:pointer;}
+  .icon-btn:active{background:rgba(255,255,255,.28);}
+
+  main{flex:1;padding:16px;display:flex;flex-direction:column;gap:16px;}
+
+  .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;box-shadow:var(--shadow);}
+  .stat-card .label{font-size:.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.03em;}
+  .stat-card .value{font-size:1.4rem;font-weight:700;margin-top:4px;}
+  .stat-card.warn .value{color:var(--warn);}
+  .stat-card.danger .value{color:var(--danger);}
+  .stat-card.ok .value{color:var(--ok);}
+
+  .section-title{font-size:.95rem;font-weight:700;margin:4px 2px 0;display:flex;align-items:center;justify-content:space-between;}
+  .section-title .count{font-weight:400;color:var(--text-muted);font-size:.8rem;}
+
+  .card-list{display:flex;flex-direction:column;gap:8px;}
+  .payment-card, .client-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;box-shadow:var(--shadow);display:flex;align-items:center;gap:12px;cursor:pointer;}
+  .payment-card:active, .client-card:active{background:var(--surface-2);}
+  .avatar{width:40px;height:40px;border-radius:50%;background:var(--primary-tint);color:var(--primary-dark);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.9rem;flex-shrink:0;}
+  .row-main{flex:1;min-width:0;}
+  .row-main .title{font-weight:600;font-size:.92rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .row-main .subtitle{font-size:.78rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;}
+  .row-end{text-align:right;flex-shrink:0;}
+  .row-end .amount{font-weight:700;font-size:.92rem;}
+  .badge{display:inline-block;font-size:.68rem;font-weight:700;padding:2px 8px;border-radius:100px;margin-top:3px;}
+  .badge.vencido{background:var(--danger-tint);color:var(--danger);}
+  .badge.pendiente{background:var(--warn-tint);color:var(--warn);}
+  .badge.pagado{background:var(--ok-tint);color:var(--ok);}
+
+  .empty{text-align:center;color:var(--text-muted);font-size:.85rem;padding:26px 10px;background:var(--surface);border:1px dashed var(--border);border-radius:var(--radius);}
+
+  .fab{position:fixed;right:calc(50% - 280px + 18px);bottom:calc(78px + env(safe-area-inset-bottom,0px) + 14px);width:54px;height:54px;border-radius:50%;background:var(--primary);color:#fff;border:none;font-size:1.6rem;box-shadow:0 6px 18px rgba(21,94,99,.4);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:25;}
+  @media (max-width:596px){ .fab{ right:18px; } }
+  .fab:active{background:var(--primary-dark);}
+
+  nav.tabbar{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);display:flex;padding-bottom:env(safe-area-inset-bottom,0px);z-index:20;}
+  nav.tabbar .tabwrap{max-width:560px;margin:0 auto;display:flex;width:100%;}
+  nav.tabbar button{flex:1;background:none;border:none;padding:9px 4px 8px;display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--text-muted);font-size:.66rem;cursor:pointer;font-family:inherit;}
+  nav.tabbar button .ic{font-size:1.25rem;}
+  nav.tabbar button.active{color:var(--primary);}
+
+  .search{width:100%;padding:11px 14px;border-radius:12px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:.9rem;}
+  .search:focus{outline:2px solid var(--primary);outline-offset:-1px;}
+
+  .modal-backdrop{position:fixed;inset:0;background:rgba(10,15,16,.5);display:flex;align-items:flex-end;justify-content:center;z-index:50;}
+  .modal-backdrop.center{align-items:center;padding:16px;}
+  .modal{background:var(--surface);width:100%;max-width:560px;border-radius:18px 18px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom,0px));max-height:88vh;overflow-y:auto;}
+  .modal-backdrop.center .modal{border-radius:18px;max-height:90vh;}
+  .modal h2{margin:0 0 14px;font-size:1.05rem;}
+  .field{margin-bottom:12px;}
+  .field label{display:block;font-size:.78rem;color:var(--text-muted);margin-bottom:5px;font-weight:600;}
+  .field input, .field select, .field textarea{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:.92rem;font-family:inherit;}
+  .field textarea{min-height:60px;resize:vertical;}
+  .field-row{display:flex;gap:10px;}
+  .field-row .field{flex:1;}
+  .modal-actions{display:flex;gap:10px;margin-top:16px;}
+  .btn{flex:1;padding:12px;border-radius:12px;border:none;font-weight:700;font-size:.92rem;cursor:pointer;font-family:inherit;}
+  .btn.primary{background:var(--primary);color:#fff;}
+  .btn.primary:active{background:var(--primary-dark);}
+  .btn.ghost{background:var(--surface-2);color:var(--text);}
+  .btn.danger{background:var(--danger-tint);color:var(--danger);}
+  .btn.block{width:100%;margin-top:8px;}
+
+  .detail-header{display:flex;align-items:center;gap:12px;}
+  .detail-header .avatar{width:52px;height:52px;font-size:1.1rem;}
+  .detail-header h2{margin:0;font-size:1.1rem;}
+  .detail-header .muted{color:var(--text-muted);font-size:.82rem;margin-top:2px;}
+  .contact-row{display:flex;gap:8px;margin-top:12px;}
+  .contact-row a{flex:1;text-align:center;padding:9px;border-radius:10px;background:var(--primary-tint);color:var(--primary-dark);text-decoration:none;font-size:.8rem;font-weight:600;}
+
+  .settings-group{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;box-shadow:var(--shadow);}
+  .settings-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);}
+  .settings-row:last-child{border-bottom:none;}
+  .settings-row .lbl{font-size:.88rem;font-weight:600;}
+  .settings-row .desc{font-size:.74rem;color:var(--text-muted);margin-top:2px;}
+  select.inline{padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font-size:.85rem;}
+
+  .toast{position:fixed;top:calc(env(safe-area-inset-top,0px) + 10px);left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:.82rem;z-index:80;box-shadow:var(--shadow);max-width:90%;text-align:center;}
+
+  .back-btn{background:none;border:none;color:var(--text);font-size:1.3rem;cursor:pointer;padding:2px 8px 2px 0;}
+  a{color:inherit;}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="top">
+    <h1 id="headerTitle"><img id="brandImg" alt="MB Emprendimientos" style="width:26px;height:26px;border-radius:7px;object-fit:cover;vertical-align:-7px;margin-right:7px;"> MB Emprendimientos</h1>
+    <button class="icon-btn" id="bellBtn" title="Activar notificaciones">🔔</button>
+  </header>
+  <main id="main"></main>
+  <button class="fab" id="fabBtn">+</button>
+  <nav class="tabbar">
+    <div class="tabwrap">
+      <button data-tab="dashboard" class="active"><span class="ic">📊</span>Inicio</button>
+      <button data-tab="clientes"><span class="ic">👤</span>Clientes</button>
+      <button data-tab="pagos"><span class="ic">💵</span>Pagos</button>
+      <button data-tab="config"><span class="ic">⚙️</span>Ajustes</button>
+    </div>
+  </nav>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------- Storage ---------- */
+const STORE_KEY = "inmobiliariaApp_data_v1";
+function loadData(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(raw) return JSON.parse(raw);
+  }catch(e){}
+  return { clients: [], settings: { currency: "PYG", reminderDays: 3 } };
+}
+function saveData(){ localStorage.setItem(STORE_KEY, JSON.stringify(DATA)); }
+let DATA = loadData();
+if(!DATA.settings) DATA.settings = { currency: "PYG", reminderDays: 3 };
+if(DATA.settings.reminderDays === undefined) DATA.settings.reminderDays = 3;
+
+/* ---------- Helpers ---------- */
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+function todayISO(){ const d = new Date(); d.setHours(0,0,0,0); return d.toISOString().slice(0,10); }
+function fmtDate(iso){
+  if(!iso) return "—";
+  const [y,m,d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+}
+function daysUntil(iso){
+  const today = new Date(todayISO()+"T00:00:00");
+  const target = new Date(iso+"T00:00:00");
+  return Math.round((target-today)/86400000);
+}
+function fmtMoney(amount){
+  amount = Number(amount)||0;
+  if(DATA.settings.currency === "USD"){
+    return "$" + amount.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+  }
+  return "Gs. " + Math.round(amount).toLocaleString("es-PY");
+}
+function initials(name){
+  return (name||"?").trim().split(/\s+/).slice(0,2).map(s=>s[0]?.toUpperCase()||"").join("") || "?";
+}
+function paymentStatus(p){
+  if(p.paidDate) return "pagado";
+  if(p.dueDate && p.dueDate < todayISO()) return "vencido";
+  return "pendiente";
+}
+function allPayments(){
+  const out = [];
+  DATA.clients.forEach(c=>{
+    (c.payments||[]).forEach(p=> out.push({...p, clientId:c.id, clientName:c.name}));
+  });
+  return out;
+}
+function getClient(id){ return DATA.clients.find(c=>c.id===id); }
+function toast(msg){
+  const t = document.createElement("div");
+  t.className = "toast";
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), 2400);
+}
+
+/* ---------- Notifications ---------- */
+function checkNotifications(){
+  if(!("Notification" in window) || Notification.permission !== "granted") return;
+  const key = "inmobiliariaApp_notified_" + todayISO();
+  if(sessionStorage.getItem(key)) return;
+  const days = DATA.settings.reminderDays;
+  const due = allPayments().filter(p=>{
+    const st = paymentStatus(p);
+    if(st === "vencido") return true;
+    if(st === "pendiente" && p.dueDate){
+      const d = daysUntil(p.dueDate);
+      return d >= 0 && d <= days;
+    }
+    return false;
+  });
+  if(due.length){
+    try{
+      new Notification("Pagos que necesitan atención", {
+        body: `Tenés ${due.length} pago(s) vencido(s) o próximo(s) a vencer.`,
+        icon: "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20100%20100%22%3E%3Crect%20width%3D%22100%22%20height%3D%22100%22%20rx%3D%2220%22%20fill%3D%22%232b2420%22/%3E%3Ctext%20x%3D%2250%22%20y%3D%2245%22%20font-size%3D%2234%22%20text-anchor%3D%22middle%22%20fill%3D%22%23c9a24a%22%20font-family%3D%22Georgia%2Cserif%22%20font-weight%3D%22bold%22%3EMB%3C/text%3E%3Ctext%20x%3D%2250%22%20y%3D%2278%22%20font-size%3D%2212%22%20text-anchor%3D%22middle%22%20fill%3D%22%23e7d5a8%22%20font-family%3D%22Arial%2Csans-serif%22%20letter-spacing%3D%221%22%3EEMPRENDIMIENTOS%3C/text%3E%3C/svg%3E"
+      });
+    }catch(e){}
+  }
+  sessionStorage.setItem(key,"1");
+}
+document.getElementById("bellBtn").addEventListener("click", async ()=>{
+  if(!("Notification" in window)){ toast("Tu navegador no soporta notificaciones."); return; }
+  if(Notification.permission === "granted"){ toast("Las notificaciones ya están activadas ✓"); checkNotifications(); return; }
+  const perm = await Notification.requestPermission();
+  if(perm === "granted"){ toast("Notificaciones activadas ✓"); checkNotifications(); }
+  else toast("No se activaron las notificaciones.");
+});
+
+/* ---------- Routing / Tabs ---------- */
+let currentTab = "dashboard";
+let currentClientId = null;
+const main = document.getElementById("main");
+const headerTitle = document.getElementById("headerTitle");
+const BRAND_ICON = document.querySelector('link[rel="icon"]').href;
+const BRAND_NAME = "MB Emprendimientos";
+const brandImgTag = `<img src="${BRAND_ICON}" alt="" style="width:26px;height:26px;border-radius:7px;object-fit:cover;vertical-align:-7px;margin-right:7px;">`;
+document.getElementById("brandImg").src = BRAND_ICON;
+const fabBtn = document.getElementById("fabBtn");
+
+document.querySelectorAll("nav.tabbar button").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    currentClientId = null;
+    setTab(btn.dataset.tab);
+  });
+});
+function setTab(tab){
+  currentTab = tab;
+  document.querySelectorAll("nav.tabbar button").forEach(b=> b.classList.toggle("active", b.dataset.tab===tab));
+  render();
+}
+
+fabBtn.addEventListener("click", ()=>{
+  if(currentTab === "clientes" || (currentTab==="dashboard")) openClientForm();
+  else if(currentTab === "pagos") openPaymentPicker();
+  else if(currentClientId) openPaymentForm(currentClientId);
+});
+
+/* ---------- Render ---------- */
+function render(){
+  if(currentClientId){ renderClientDetail(currentClientId); return; }
+  fabBtn.style.display = "flex";
+  if(currentTab === "dashboard"){ headerTitle.innerHTML = brandImgTag + BRAND_NAME; renderDashboard(); }
+  else if(currentTab === "clientes"){ headerTitle.innerHTML = brandImgTag + "Clientes"; renderClientes(); }
+  else if(currentTab === "pagos"){ headerTitle.innerHTML = brandImgTag + "Pagos"; renderPagos(); }
+  else if(currentTab === "config"){ headerTitle.innerHTML = brandImgTag + "Ajustes"; fabBtn.style.display="none"; renderConfig(); }
+}
+
+function renderDashboard(){
+  const payments = allPayments();
+  const overdue = payments.filter(p=>paymentStatus(p)==="vencido");
+  const upcoming = payments.filter(p=>{
+    if(paymentStatus(p)!=="pendiente" || !p.dueDate) return false;
+    const d = daysUntil(p.dueDate);
+    return d>=0 && d<=7;
+  });
+  const now = new Date();
+  const monthPrefix = todayISO().slice(0,7);
+  const collectedThisMonth = payments.filter(p=>p.paidDate && p.paidDate.slice(0,7)===monthPrefix)
+    .reduce((s,p)=>s+Number(p.amount||0),0);
+
+  let html = `<div class="stat-grid">
+    <div class="stat-card"><div class="label">Clientes</div><div class="value">${DATA.clients.length}</div></div>
+    <div class="stat-card ok"><div class="label">Cobrado este mes</div><div class="value" style="font-size:1.05rem">${fmtMoney(collectedThisMonth)}</div></div>
+    <div class="stat-card danger"><div class="label">Pagos vencidos</div><div class="value">${overdue.length}</div></div>
+    <div class="stat-card warn"><div class="label">Vencen en 7 días</div><div class="value">${upcoming.length}</div></div>
+  </div>`;
+
+  html += sectionHtml("🔴 Vencidos", overdue, "No tenés pagos vencidos. 🎉");
+  html += sectionHtml("🟡 Próximos a vencer (7 días)", upcoming, "No hay pagos próximos a vencer.");
+
+  main.innerHTML = html;
+  bindPaymentCards();
+}
+
+function sectionHtml(title, list, emptyMsg){
+  list = list.slice().sort((a,b)=> (a.dueDate||"").localeCompare(b.dueDate||""));
+  let html = `<div class="section-title">${title}<span class="count">${list.length}</span></div>`;
+  if(!list.length){ html += `<div class="empty">${emptyMsg}</div>`; return html; }
+  html += `<div class="card-list">`;
+  list.forEach(p=>{
+    html += paymentCardHtml(p, true);
+  });
+  html += `</div>`;
+  return html;
+}
+
+function paymentCardHtml(p, showClient){
+  const st = paymentStatus(p);
+  const sub = st==="vencido" ? `Venció el ${fmtDate(p.dueDate)}` : (st==="pagado" ? `Pagado el ${fmtDate(p.paidDate)}` : `Vence el ${fmtDate(p.dueDate)}`);
+  return `<div class="payment-card" data-pid="${p.id}" data-cid="${p.clientId}">
+    <div class="avatar">${initials(showClient? p.clientName : "")}</div>
+    <div class="row-main">
+      <div class="title">${showClient? escapeHtml(p.clientName) : escapeHtml(p.description||"Pago")}</div>
+      <div class="subtitle">${showClient? escapeHtml(p.description||"Pago")+" · " : ""}${sub}</div>
+    </div>
+    <div class="row-end">
+      <div class="amount">${fmtMoney(p.amount)}</div>
+      <span class="badge ${st}">${st}</span>
+    </div>
+  </div>`;
+}
+
+function bindPaymentCards(){
+  main.querySelectorAll(".payment-card").forEach(el=>{
+    el.addEventListener("click", ()=>{
+      currentClientId = el.dataset.cid;
+      render();
+    });
+  });
+}
+
+function renderClientes(){
+  let html = `<input type="search" class="search" id="clientSearch" placeholder="Buscar cliente...">`;
+  html += `<div class="card-list" id="clientList"></div>`;
+  main.innerHTML = html;
+  const listEl = document.getElementById("clientList");
+  function draw(filter){
+    filter = (filter||"").toLowerCase();
+    const clients = DATA.clients.filter(c=> c.name.toLowerCase().includes(filter) || (c.property||"").toLowerCase().includes(filter));
+    if(!clients.length){ listEl.innerHTML = `<div class="empty">No hay clientes${filter? " que coincidan":""}. Tocá el botón + para agregar uno.</div>`; return; }
+    listEl.innerHTML = clients.map(c=>{
+      const pend = (c.payments||[]).filter(p=>paymentStatus(p)!=="pagado").length;
+      return `<div class="client-card" data-cid="${c.id}">
+        <div class="avatar">${initials(c.name)}</div>
+        <div class="row-main">
+          <div class="title">${escapeHtml(c.name)}</div>
+          <div class="subtitle">${escapeHtml(c.property||"Sin propiedad asignada")}</div>
+        </div>
+        <div class="row-end">
+          ${pend>0 ? `<span class="badge pendiente">${pend} pend.</span>` : `<span class="badge pagado">al día</span>`}
+        </div>
+      </div>`;
+    }).join("");
+    listEl.querySelectorAll(".client-card").forEach(el=>{
+      el.addEventListener("click", ()=>{ currentClientId = el.dataset.cid; render(); });
+    });
+  }
+  draw("");
+  document.getElementById("clientSearch").addEventListener("input", e=> draw(e.target.value));
+}
+
+function renderPagos(){
+  const payments = allPayments().sort((a,b)=> (a.dueDate||"9999").localeCompare(b.dueDate||"9999"));
+  let html = "";
+  ["vencido","pendiente","pagado"].forEach(status=>{
+    const list = payments.filter(p=>paymentStatus(p)===status);
+    const titles = {vencido:"🔴 Vencidos", pendiente:"🟡 Pendientes", pagado:"🟢 Pagados"};
+    html += `<div class="section-title">${titles[status]}<span class="count">${list.length}</span></div>`;
+    if(!list.length){ html += `<div class="empty">Nada por acá.</div>`; }
+    else{
+      html += `<div class="card-list">` + list.map(p=>paymentCardHtml(p,true)).join("") + `</div>`;
+    }
+  });
+  main.innerHTML = html;
+  bindPaymentCards();
+}
+
+function renderConfig(){
+  main.innerHTML = `
+  <div class="settings-group">
+    <div class="settings-row">
+      <div><div class="lbl">Moneda</div><div class="desc">Cómo se muestran los montos</div></div>
+      <select class="inline" id="currencySel">
+        <option value="PYG" ${DATA.settings.currency==="PYG"?"selected":""}>Gs. (Guaraníes)</option>
+        <option value="USD" ${DATA.settings.currency==="USD"?"selected":""}>US$ (Dólares)</option>
+      </select>
+    </div>
+    <div class="settings-row">
+      <div><div class="lbl">Aviso anticipado</div><div class="desc">Avisar X días antes del vencimiento</div></div>
+      <select class="inline" id="reminderSel">
+        ${[1,2,3,5,7,10].map(n=>`<option value="${n}" ${DATA.settings.reminderDays==n?"selected":""}>${n} días</option>`).join("")}
+      </select>
+    </div>
+    <div class="settings-row">
+      <div><div class="lbl">Notificaciones</div><div class="desc">Estado: ${("Notification" in window)? Notification.permission : "no soportado"}</div></div>
+      <button class="btn ghost" style="flex:none;padding:8px 14px;" id="notifBtnCfg">Activar</button>
+    </div>
+  </div>
+
+  <div class="section-title">Respaldo de datos</div>
+  <div class="settings-group">
+    <div class="settings-row">
+      <div><div class="lbl">Exportar copia de seguridad</div><div class="desc">Descargá un archivo con todos tus datos</div></div>
+    </div>
+    <button class="btn primary block" id="exportBtn">⬇️ Exportar datos (.json)</button>
+    <div class="settings-row" style="margin-top:10px;">
+      <div><div class="lbl">Importar copia de seguridad</div><div class="desc">Usalo en otro dispositivo para traer tus datos</div></div>
+    </div>
+    <input type="file" id="importFile" accept="application/json" style="display:none;">
+    <button class="btn ghost block" id="importBtn">⬆️ Importar datos (.json)</button>
+  </div>
+
+  <div class="section-title">Zona de riesgo</div>
+  <div class="settings-group">
+    <button class="btn danger block" id="clearBtn">🗑️ Borrar todos los datos</button>
+  </div>
+  <div class="empty" style="text-align:left;">
+    ℹ️ Esta app guarda tus datos en este dispositivo (celular o compu), no en internet. Para ver los mismos clientes en otro dispositivo, exportá una copia acá e importala allá. Podés repetir esto cada vez que quieras mantenerlos sincronizados.
+  </div>
+  `;
+  document.getElementById("currencySel").addEventListener("change", e=>{ DATA.settings.currency=e.target.value; saveData(); toast("Moneda actualizada"); });
+  document.getElementById("reminderSel").addEventListener("change", e=>{ DATA.settings.reminderDays=Number(e.target.value); saveData(); toast("Preferencia guardada"); });
+  document.getElementById("notifBtnCfg").addEventListener("click", ()=> document.getElementById("bellBtn").click());
+  document.getElementById("exportBtn").addEventListener("click", exportData);
+  document.getElementById("importBtn").addEventListener("click", ()=> document.getElementById("importFile").click());
+  document.getElementById("importFile").addEventListener("change", importData);
+  document.getElementById("clearBtn").addEventListener("click", ()=>{
+    openConfirm("¿Borrar todos los datos?", "Esta acción no se puede deshacer. Se eliminarán todos los clientes y pagos guardados en este dispositivo.", ()=>{
+      DATA = { clients: [], settings: DATA.settings };
+      saveData();
+      toast("Datos borrados");
+      render();
+    });
+  });
+}
+
+function exportData(){
+  const blob = new Blob([JSON.stringify(DATA, null, 2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `mis-clientes-backup-${todayISO()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 2000);
+  toast("Archivo de respaldo descargado");
+}
+function importData(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try{
+      const parsed = JSON.parse(reader.result);
+      if(!parsed || !Array.isArray(parsed.clients)) throw new Error("formato inválido");
+      openConfirm("¿Importar datos?", "Esto va a reemplazar los datos actuales de este dispositivo por los del archivo importado.", ()=>{
+        DATA = parsed;
+        if(!DATA.settings) DATA.settings = { currency:"PYG", reminderDays:3 };
+        saveData();
+        toast("Datos importados correctamente");
+        render();
+      });
+    }catch(err){
+      toast("El archivo no es válido.");
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = "";
+}
+
+/* ---------- Client Detail ---------- */
+function renderClientDetail(id){
+  const c = getClient(id);
+  if(!c){ currentClientId=null; render(); return; }
+  headerTitle.innerHTML = `<button class="back-btn" id="backBtn">←</button> Cliente`;
+  fabBtn.style.display = "flex";
+  const payments = (c.payments||[]).slice().sort((a,b)=> (b.dueDate||"").localeCompare(a.dueDate||""));
+  const pendCount = payments.filter(p=>paymentStatus(p)!=="pagado").length;
+
+  let html = `<div class="settings-group">
+    <div class="detail-header">
+      <div class="avatar">${initials(c.name)}</div>
+      <div>
+        <h2>${escapeHtml(c.name)}</h2>
+        <div class="muted">${escapeHtml(c.property||"Sin propiedad asignada")}</div>
+      </div>
+    </div>
+    <div class="contact-row">
+      ${c.phone? `<a href="tel:${escapeAttr(c.phone)}">📞 Llamar</a>`:""}
+      ${c.phone? `<a href="https://wa.me/${escapeAttr(c.phone.replace(/\D/g,''))}" target="_blank" rel="noopener">💬 WhatsApp</a>`:""}
+      ${c.email? `<a href="mailto:${escapeAttr(c.email)}">✉️ Email</a>`:""}
+    </div>
+    ${(c.totalProperty || c.installments) ? `<div class="stat-grid" style="margin-top:14px;">
+      ${c.totalProperty ? `<div class="stat-card"><div class="label">Total del inmueble</div><div class="value" style="font-size:1.05rem">${fmtMoney(c.totalProperty)}</div></div>` : ""}
+      ${c.installments ? `<div class="stat-card"><div class="label">Cuotas</div><div class="value" style="font-size:1.05rem">${(c.payments||[]).filter(p=>paymentStatus(p)==="pagado").length} / ${c.installments}${c.totalProperty ? ` <span style="font-size:.65rem;color:var(--text-muted);font-weight:400;">(${fmtMoney(c.totalProperty/c.installments)} c/u)</span>`:""}</div></div>` : ""}
+    </div>` : ""}
+    ${c.notes? `<div class="muted" style="margin-top:12px;">${escapeHtml(c.notes)}</div>` : ""}
+    <div class="modal-actions" style="margin-top:14px;">
+      <button class="btn ghost" id="editClientBtn">✏️ Editar</button>
+      <button class="btn danger" id="deleteClientBtn">🗑️ Eliminar</button>
+    </div>
+  </div>`;
+
+  html += `<div class="section-title">Pagos<span class="count">${pendCount} pendiente(s)</span></div>`;
+  if(!payments.length){ html += `<div class="empty">Este cliente no tiene pagos cargados. Tocá + para agregar el primero.</div>`; }
+  else{
+    html += `<div class="card-list">` + payments.map(p=>{
+      const st = paymentStatus(p);
+      const sub = st==="vencido" ? `Venció el ${fmtDate(p.dueDate)}` : (st==="pagado" ? `Pagado el ${fmtDate(p.paidDate)}` : `Vence el ${fmtDate(p.dueDate)}`);
+      return `<div class="payment-card" data-pid="${p.id}">
+        <div class="avatar">💵</div>
+        <div class="row-main">
+          <div class="title">${escapeHtml(p.description||"Pago")}</div>
+          <div class="subtitle">${sub}</div>
+        </div>
+        <div class="row-end">
+          <div class="amount">${fmtMoney(p.amount)}</div>
+          <span class="badge ${st}">${st}</span>
+        </div>
+      </div>`;
+    }).join("") + `</div>`;
+  }
+
+  main.innerHTML = html;
+  document.getElementById("backBtn").addEventListener("click", ()=>{ currentClientId=null; render(); });
+  document.getElementById("editClientBtn").addEventListener("click", ()=> openClientForm(c.id));
+  document.getElementById("deleteClientBtn").addEventListener("click", ()=>{
+    openConfirm("¿Eliminar cliente?", `Se eliminará a ${c.name} y todos sus pagos.`, ()=>{
+      DATA.clients = DATA.clients.filter(x=>x.id!==c.id);
+      saveData();
+      currentClientId = null;
+      toast("Cliente eliminado");
+      render();
+    });
+  });
+  main.querySelectorAll(".payment-card").forEach(el=>{
+    el.addEventListener("click", ()=> openPaymentForm(c.id, el.dataset.pid));
+  });
+}
+
+/* ---------- Forms: Client ---------- */
+function openClientForm(id){
+  const editing = !!id;
+  const c = editing ? getClient(id) : {name:"",phone:"",email:"",property:"",notes:""};
+  const html = `
+    <h2>${editing? "Editar cliente":"Nuevo cliente"}</h2>
+    <div class="field"><label>Nombre completo *</label><input id="f_name" value="${escapeAttr(c.name)}" placeholder="Ej: Juan Pérez"></div>
+    <div class="field-row">
+      <div class="field"><label>Teléfono</label><input id="f_phone" value="${escapeAttr(c.phone||"")}" placeholder="0981 123 456" inputmode="tel"></div>
+      <div class="field"><label>Email</label><input id="f_email" value="${escapeAttr(c.email||"")}" placeholder="correo@ejemplo.com" inputmode="email"></div>
+    </div>
+    <div class="field"><label>Propiedad</label><input id="f_property" value="${escapeAttr(c.property||"")}" placeholder="Ej: Depto 3B, Barrio Villa Morra"></div>
+    <div class="field-row">
+      <div class="field"><label>Total del inmueble</label><input id="f_total" type="number" inputmode="decimal" value="${c.totalProperty||""}" placeholder="0"></div>
+      <div class="field"><label>Cantidad de cuotas</label><input id="f_installments" type="number" inputmode="numeric" value="${c.installments||""}" placeholder="Ej: 12"></div>
+    </div>
+    <div class="field"><label>Notas</label><textarea id="f_notes" placeholder="Detalles del contrato, condiciones, etc.">${escapeHtml(c.notes||"")}</textarea></div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="cancelBtn">Cancelar</button>
+      <button class="btn primary" id="saveBtn">Guardar</button>
+    </div>
+  `;
+  const close = openModal(html, true);
+  document.getElementById("cancelBtn").addEventListener("click", close);
+  document.getElementById("saveBtn").addEventListener("click", ()=>{
+    const name = document.getElementById("f_name").value.trim();
+    if(!name){ toast("Ingresá el nombre del cliente"); return; }
+    const data = {
+      name,
+      phone: document.getElementById("f_phone").value.trim(),
+      email: document.getElementById("f_email").value.trim(),
+      property: document.getElementById("f_property").value.trim(),
+      totalProperty: Number(document.getElementById("f_total").value) || 0,
+      installments: Number(document.getElementById("f_installments").value) || 0,
+      notes: document.getElementById("f_notes").value.trim(),
+    };
+    if(editing){
+      Object.assign(c, data);
+    } else {
+      DATA.clients.push({ id: uid(), payments: [], ...data });
+    }
+    saveData();
+    close();
+    toast(editing? "Cliente actualizado" : "Cliente agregado");
+    render();
+  });
+}
+
+/* ---------- Forms: Payment ---------- */
+function openPaymentPicker(){
+  if(!DATA.clients.length){ toast("Primero agregá un cliente"); openClientForm(); return; }
+  const html = `
+    <h2>¿Para qué cliente es el pago?</h2>
+    <div class="card-list">
+      ${DATA.clients.map(c=>`<div class="client-card" data-cid="${c.id}">
+        <div class="avatar">${initials(c.name)}</div>
+        <div class="row-main"><div class="title">${escapeHtml(c.name)}</div><div class="subtitle">${escapeHtml(c.property||"")}</div></div>
+      </div>`).join("")}
+    </div>
+  `;
+  const close = openModal(html, true);
+  main.parentElement.querySelectorAll?.(""); // no-op safeguard
+  document.querySelectorAll(".modal .client-card").forEach(el=>{
+    el.addEventListener("click", ()=>{ close(); openPaymentForm(el.dataset.cid); });
+  });
+}
+
+function openPaymentForm(clientId, paymentId){
+  const c = getClient(clientId);
+  if(!c) return;
+  c.payments = c.payments || [];
+  const editing = !!paymentId;
+  const p = editing ? c.payments.find(x=>x.id===paymentId) : {description:"",amount:"",dueDate:todayISO(),paidDate:""};
+  const html = `
+    <h2>${editing? "Editar pago":"Nuevo pago"} — ${escapeHtml(c.name)}</h2>
+    <div class="field"><label>Concepto</label><input id="p_desc" value="${escapeAttr(p.description||"")}" placeholder="Ej: Cuota alquiler agosto"></div>
+    <div class="field-row">
+      <div class="field"><label>Monto *</label><input id="p_amount" type="number" inputmode="decimal" value="${p.amount||""}" placeholder="0"></div>
+      <div class="field"><label>Vencimiento</label><input id="p_due" type="date" value="${p.dueDate||""}"></div>
+    </div>
+    <div class="field"><label>Fecha de pago (dejar vacío si no pagó aún)</label><input id="p_paid" type="date" value="${p.paidDate||""}"></div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="cancelBtn">Cancelar</button>
+      <button class="btn primary" id="saveBtn">Guardar</button>
+    </div>
+    ${editing? `<button class="btn danger block" id="delPayBtn">🗑️ Eliminar pago</button>` : ""}
+    ${(editing && !p.paidDate)? `<button class="btn ghost block" id="markPaidBtn">✅ Marcar como pagado hoy</button>` : ""}
+  `;
+  const close = openModal(html, true);
+  document.getElementById("cancelBtn").addEventListener("click", close);
+  document.getElementById("saveBtn").addEventListener("click", ()=>{
+    const amount = Number(document.getElementById("p_amount").value);
+    if(!amount || amount<=0){ toast("Ingresá un monto válido"); return; }
+    const data = {
+      description: document.getElementById("p_desc").value.trim(),
+      amount,
+      dueDate: document.getElementById("p_due").value || "",
+      paidDate: document.getElementById("p_paid").value || "",
+    };
+    if(editing){ Object.assign(p, data); }
+    else{ c.payments.push({ id: uid(), ...data }); }
+    saveData();
+    close();
+    toast(editing? "Pago actualizado":"Pago agregado");
+    render();
+  });
+  if(editing){
+    document.getElementById("delPayBtn").addEventListener("click", ()=>{
+      openConfirm("¿Eliminar pago?", "Esta acción no se puede deshacer.", ()=>{
+        c.payments = c.payments.filter(x=>x.id!==p.id);
+        saveData();
+        close();
+        toast("Pago eliminado");
+        render();
+      });
+    });
+    const mp = document.getElementById("markPaidBtn");
+    if(mp) mp.addEventListener("click", ()=>{
+      p.paidDate = todayISO();
+      saveData();
+      close();
+      toast("Pago marcado como pagado ✓");
+      render();
+    });
+  }
+}
+
+/* ---------- Modal helpers ---------- */
+function openModal(innerHtml, center){
+  const backdrop = document.createElement("div");
+  backdrop.className = "modal-backdrop" + (center? " center":"");
+  backdrop.innerHTML = `<div class="modal">${innerHtml}</div>`;
+  document.body.appendChild(backdrop);
+  backdrop.addEventListener("click", (e)=>{ if(e.target===backdrop) close(); });
+  function close(){ backdrop.remove(); }
+  return close;
+}
+function openConfirm(title, msg, onConfirm){
+  const html = `<h2>${title}</h2><p style="color:var(--text-muted);font-size:.88rem;">${msg}</p>
+    <div class="modal-actions">
+      <button class="btn ghost" id="confCancel">Cancelar</button>
+      <button class="btn danger" id="confOk">Confirmar</button>
+    </div>`;
+  const close = openModal(html, true);
+  document.getElementById("confCancel").addEventListener("click", close);
+  document.getElementById("confOk").addEventListener("click", ()=>{ close(); onConfirm(); });
+}
+
+/* ---------- Utils ---------- */
+function escapeHtml(str){
+  return String(str==null?"":str).replace(/[&<>"']/g, s=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[s]));
+}
+function escapeAttr(str){ return escapeHtml(str); }
+
+/* ---------- Init ---------- */
+render();
+checkNotifications();
+setInterval(checkNotifications, 1000*60*30);
+
+/* Seed a bit of guidance the very first time */
+if(DATA.clients.length===0 && !localStorage.getItem("inmobiliariaApp_seenIntro")){
+  localStorage.setItem("inmobiliariaApp_seenIntro","1");
+  setTimeout(()=> toast("Bienvenido 👋 Tocá + para agregar tu primer cliente"), 500);
+}
+
+})();
+
+if("serviceWorker" in navigator){
+  window.addEventListener("load", ()=>{
+    navigator.serviceWorker.register("sw.js").catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>
