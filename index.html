@@ -1182,7 +1182,7 @@ function renderClientDetail(id){
     </div>
     ${(c.totalProperty || c.installments) ? `<div class="stat-grid" style="margin-top:14px;">
       ${c.totalProperty ? `<div class="stat-card"><div class="label">Total del inmueble</div><div class="value" style="font-size:1.05rem">${fmtMoney(c.totalProperty)}</div></div>` : ""}
-      ${c.installments ? `<div class="stat-card"><div class="label">Cuotas</div><div class="value" style="font-size:1.05rem">${(c.payments||[]).filter(p=>paymentStatus(p)==="pagado").length} / ${c.installments}${c.totalProperty ? ` <span style="font-size:.65rem;color:var(--text-muted);font-weight:400;">(${fmtMoney(c.totalProperty/c.installments)} c/u)</span>`:""}</div></div>` : ""}
+      ${c.installments ? `<div class="stat-card"><div class="label">Cuotas</div><div class="value" style="font-size:1.05rem">${(c.payments||[]).filter(p=>isCuota(p) && paymentStatus(p)==="pagado").length} / ${c.installments}${c.totalProperty ? ` <span style="font-size:.65rem;color:var(--text-muted);font-weight:400;">(${fmtMoney(c.totalProperty/c.installments)} c/u)</span>`:""}</div></div>` : ""}
       ${c.totalProperty ? `<div class="stat-card danger"><div class="label">Saldo pendiente</div><div class="value" style="font-size:1.05rem">${fmtMoney(Math.max(0, c.totalProperty - (c.payments||[]).filter(p=>paymentStatus(p)==="pagado").reduce((s,p)=>s+Number(p.amount||0),0)))}</div></div>` : ""}
     </div>` : ""}
     ${c.notes? `<div class="muted" style="margin-top:12px;">${escapeHtml(c.notes)}</div>` : ""}
@@ -1193,9 +1193,9 @@ function renderClientDetail(id){
   </div>`;
 
   html += `<div class="section-title">Cuotas y pagos<span class="count">${pendCount} pendiente(s)</span></div>`;
-  const missing = Number(c.installments||0) - (c.payments||[]).length;
+  const missing = Number(c.installments||0) - (c.payments||[]).filter(isCuota).length;
   if(!Number(c.installments) || missing > 0){
-    html += `<button class="btn primary block" id="genCuotasBtn" style="margin:0 0 10px;">📅 ${Number(c.installments) ? `Cargar las ${missing} cuota(s) que faltan` : "Cargar todas las cuotas"}</button>`;
+    html += `<button class="btn primary block" id="genCuotasBtn" style="margin:0 0 10px;flex:none;display:block;">📅 ${Number(c.installments) ? `Cargar las ${missing} cuota(s) que faltan` : "Cargar todas las cuotas"}</button>`;
   }
   if(!payments.length){ html += `<div class="empty">Este cliente no tiene pagos cargados. Tocá + para agregar el primero.</div>`; }
   else{
@@ -1240,6 +1240,7 @@ function renderClientDetail(id){
 }
 
 /* ---------- Cuotas del cliente ---------- */
+function isCuota(p){ return !/entrega|seña|sena|anticipo|inicial/i.test(p.description||""); }
 function openClientPayDate(clientId, payId, fixing){
   const c = getClient(clientId); if(!c) return;
   const p = (c.payments||[]).find(x=>x.id===payId); if(!p) return;
@@ -1266,7 +1267,7 @@ function openGenerateCuotas(clientId){
   c.payments = c.payments || [];
   const askN = !Number(c.installments);
   let N = Number(c.installments||0);
-  const have = c.payments.length;
+  const have = c.payments.filter(isCuota).length;
   if(askN) N = have + 1;
   let count = N - have;
   if(count <= 0) return;
@@ -1277,7 +1278,7 @@ function openGenerateCuotas(clientId){
   const close = openModal(`
     <h2>Cargar cuotas — ${escapeHtml(c.name)}</h2>
     ${askN ? `<div class="field"><label>Cantidad total de cuotas del cliente *</label><input id="gc_n" type="number" inputmode="numeric" placeholder="Ej: 60"></div>` : ""}
-    <div class="muted" id="gc_info" style="margin-top:-6px;margin-bottom:12px;font-size:.82rem;">${askN ? `Ya hay ${have} pago(s) cargado(s).` : `Ya hay ${have} de ${N} cuota(s) cargada(s).`} Se van a agregar las ${count} que faltan como pendientes.${c.totalProperty? ` Saldo sin cargar: ${fmtMoney(rest)}.`:""}</div>
+    <div class="muted" id="gc_info" style="margin-top:-6px;margin-bottom:12px;font-size:.82rem;">${askN ? `Ya hay ${have} pago(s) cargado(s).` : `Ya hay ${have} de ${N} cuota(s) cargada(s) (la entrega no cuenta como cuota).`} Se van a agregar las ${count} que faltan como pendientes.${c.totalProperty? ` Saldo sin cargar: ${fmtMoney(rest)}.`:""}</div>
     <div class="field-row">
       <div class="field"><label>Monto de cada cuota *</label><input id="gc_amount" type="number" inputmode="decimal" value="${per0||""}"></div>
       <div class="field"><label>Frecuencia</label><select id="gc_every">${[1,2,3,6].map(n=>`<option value="${n}">${n===1?"Cada mes":`Cada ${n} meses`}</option>`).join("")}</select></div>
