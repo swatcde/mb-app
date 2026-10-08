@@ -551,7 +551,8 @@ function render(){
   if(currentView === "comisiones"){
     tabbarEl.style.display = "none";
     fabBtn.style.display = "flex";
-    headerTitle.innerHTML = `<button class="back-btn" id="backFromCom" title="Volver">←</button> Comisiones`;
+    const comTitle = comProjectId ? (projectName(comProjectId) + " Comisiones") : (comProjectId === "" ? "Comisiones (sin urbanización)" : "Comisiones");
+    headerTitle.innerHTML = `<button class="back-btn" id="backFromCom" title="Volver">←</button> ${escapeHtml(comTitle)}`;
     renderComisiones();
     document.getElementById("backFromCom").addEventListener("click", ()=>{ currentView="projects"; render(); });
     return;
@@ -601,17 +602,27 @@ function renderProjectsList(){
     }).join("") + `</div>`;
   }
   const coms = DATA.commissions||[];
-  const comPend = sumCur(coms, comPending);
-  html += `<div class="card-list" style="margin-top:10px;"><div class="client-card" id="openComisiones">
+  const groups = [];
+  projects.forEach(pr=>{ const items = coms.filter(x=>x.projectId===pr.id); if(items.length) groups.push({ key: pr.id, title: pr.name + " COMISIONES", items }); });
+  const loose = coms.filter(x=> !projects.some(pr=>pr.id===x.projectId));
+  if(loose.length) groups.push({ key: "", title: "COMISIONES (sin urbanización)", items: loose });
+  if(!groups.length) groups.push({ key: "*", title: "COMISIONES", items: [] });
+  html += `<div class="card-list" style="margin-top:10px;">` + groups.map(g=>{
+    const pend = sumCur(g.items, comPending);
+    return `<div class="client-card" data-comproj="${escapeAttr(g.key)}">
       <div class="avatar">🤝</div>
       <div class="row-main">
-        <div class="title">Comisiones</div>
-        <div class="subtitle">${coms.length ? `${coms.length} lote(s) · ${fmtMulti(comPend)} por pagar` : "Comisiones por lote"}</div>
+        <div class="title" style="white-space:normal;overflow:visible;">${escapeHtml(g.title.toUpperCase())}</div>
+        <div class="subtitle">${g.items.length ? `${g.items.length} lote(s) · ${fmtMulti(pend)} por pagar` : "Comisiones por lote"}</div>
       </div>
       <div class="row-end"><span style="color:var(--text-muted);">›</span></div>
-    </div></div>`;
+    </div>`;
+  }).join("") + `</div>`;
   main.innerHTML = html;
-  document.getElementById("openComisiones").addEventListener("click", ()=>{ currentView = "comisiones"; render(); });
+  main.querySelectorAll("[data-comproj]").forEach(el=> el.addEventListener("click", ()=>{
+    comProjectId = el.dataset.comproj === "*" ? null : el.dataset.comproj;
+    currentView = "comisiones"; render();
+  }));
   main.querySelectorAll(".client-card[data-pid]").forEach(el=>{
     el.addEventListener("click", ()=>{
       currentProjectId = el.dataset.pid;
@@ -810,8 +821,9 @@ function planText(amounts, cur){
   return `${amounts.length} cuotas: ${amounts.length-1} de ${fmtCur(first, cur)} y la ${amounts.length}ª de ${fmtCur(last, cur)}`;
 }
 let comisionFilter = "todas";
+let comProjectId = null; // null = todas; "" = sin urbanización; id = una urbanización
 function renderComisiones(){
-  const list0 = projCommissions();
+  const list0 = projCommissions().filter(x=> comProjectId === null ? true : (comProjectId === "" ? !(DATA.projects||[]).some(pr=>pr.id===x.projectId) : x.projectId === comProjectId));
   const pend = sumCur(list0, comPending);
   const pagado = sumCur(list0, comPaid);
   let html = `<div class="stat-grid" style="margin-bottom:6px;">
@@ -921,7 +933,7 @@ function openCommissionDetail(id){
 function openCommissionForm(id){
   const list = projCommissions();
   const editing = !!id;
-  const x = editing ? list.find(m=>m.id===id) : {projectId:(DATA.projects||[]).length===1?DATA.projects[0].id:"",currency:"USD",lot:"",seller:(list.length? (list[list.length-1].seller||"") : ""),amount:"",perInstallment:"",firstDue:"",notes:""};
+  const x = editing ? list.find(m=>m.id===id) : {projectId:(comProjectId || ((DATA.projects||[]).length===1?DATA.projects[0].id:"")),currency:"USD",lot:"",seller:(list.length? (list[list.length-1].seller||"") : ""),amount:"",perInstallment:"",firstDue:"",notes:""};
   if(!x) return;
   const names = sellerNames();
   const html = `
