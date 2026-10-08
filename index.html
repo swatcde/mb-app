@@ -900,7 +900,7 @@ function openCommissionDetail(id){
 function openCommissionForm(id){
   const list = projCommissions();
   const editing = !!id;
-  const x = editing ? list.find(m=>m.id===id) : {projectId:(DATA.projects||[]).length===1?DATA.projects[0].id:"",currency:"USD",lot:"",seller:"",amount:"",perInstallment:"",firstDue:"",notes:""};
+  const x = editing ? list.find(m=>m.id===id) : {projectId:(DATA.projects||[]).length===1?DATA.projects[0].id:"",currency:"USD",lot:"",seller:(list.length? (list[list.length-1].seller||"") : ""),amount:"",perInstallment:"",firstDue:"",notes:""};
   if(!x) return;
   const names = sellerNames();
   const html = `
