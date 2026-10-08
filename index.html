@@ -580,7 +580,7 @@ function renderProjectsList(){
     }).join("") + `</div>`;
   }
   const coms = DATA.commissions||[];
-  const comPend = coms.filter(x=>!x.paidDate).reduce((s,x)=>s+Number(x.amount||0),0);
+  const comPend = coms.reduce((s,x)=>s+comPending(x),0);
   html += `<div class="card-list" style="margin-top:10px;"><div class="client-card" id="openComisiones">
       <div class="avatar">🤝</div>
       <div class="row-main">
@@ -750,12 +750,41 @@ function sellerNames(){
   return [...set].filter(Boolean).sort((a,b)=>a.localeCompare(b,"es"));
 }
 function lotKey(x){ return (x.lot||"").replace(/^lote\s*/i,""); }
+function lotLabel(x){ return /^lote/i.test(x.lot||"") ? x.lot : "Lote " + (x.lot||"?"); }
 function lotCompare(a,b){ return projectName(a.projectId).localeCompare(projectName(b.projectId),"es") || lotKey(a).localeCompare(lotKey(b),"es",{numeric:true}); }
+function comInst(x){
+  if(Array.isArray(x.installments) && x.installments.length) return x.installments;
+  return [{ id: "single", amount: Number(x.amount||0), dueDate: "", paidDate: x.paidDate||"" }];
+}
+function comPaid(x){ return comInst(x).filter(i=>i.paidDate).reduce((s,i)=>s+Number(i.amount||0),0); }
+function comPending(x){ return Math.max(0, Number(x.amount||0) - comPaid(x)); }
+function comDone(x){ return comInst(x).every(i=>i.paidDate); }
+function addMonthsISO(iso, n){
+  if(!iso) return "";
+  const [y,m,d] = iso.split("-").map(Number);
+  const last = new Date(y, m-1+n+1, 0).getDate();
+  const dt = new Date(y, m-1+n, Math.min(d,last));
+  return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;
+}
+function buildInstallments(total, per){
+  total = Number(total)||0; per = Number(per)||0;
+  if(!per || per >= total) return [total];
+  const out = [];
+  let rest = total;
+  while(rest > 0.0001){ const a = Math.min(per, rest); out.push(Math.round(a*100)/100); rest = Math.round((rest-a)*100)/100; }
+  return out;
+}
+function planText(amounts){
+  if(amounts.length<=1) return amounts.length ? `Un solo pago de ${fmtMoney(amounts[0])}` : "";
+  const last = amounts[amounts.length-1], first = amounts[0];
+  if(last === first) return `${amounts.length} cuotas de ${fmtMoney(first)}`;
+  return `${amounts.length} cuotas: ${amounts.length-1} de ${fmtMoney(first)} y la ${amounts.length}ª de ${fmtMoney(last)}`;
+}
 let comisionFilter = "todas";
 function renderComisiones(){
   const list0 = projCommissions();
   const total = list0.reduce((s,x)=>s+Number(x.amount||0),0);
-  const pagado = list0.filter(x=>x.paidDate).reduce((s,x)=>s+Number(x.amount||0),0);
+  const pagado = list0.reduce((s,x)=>s+comPaid(x),0);
   let html = `<div class="stat-grid" style="margin-bottom:6px;">
     <div class="stat-card warn"><div class="label">Por pagar</div><div class="value" style="font-size:1.05rem">${fmtMoney(total-pagado)}</div></div>
     <div class="stat-card ok"><div class="label">Pagado</div><div class="value" style="font-size:1.05rem">${fmtMoney(pagado)}</div></div>
@@ -767,27 +796,25 @@ function renderComisiones(){
     main.innerHTML = html; return;
   }
   html += `<div style="display:flex;gap:6px;margin-bottom:10px;">${Object.keys(filters).map(k=>`<button class="btn ${comisionFilter===k?"primary":"ghost"}" data-cf="${k}" style="flex:1;padding:7px 4px;font-size:.78rem;">${filters[k]}</button>`).join("")}</div>`;
-  const list = list0.filter(x=> comisionFilter==="todas" || (comisionFilter==="pagadas" ? !!x.paidDate : !x.paidDate)).slice().sort(lotCompare);
+  const list = list0.filter(x=> comisionFilter==="todas" || (comisionFilter==="pagadas" ? comDone(x) : !comDone(x))).slice().sort(lotCompare);
   if(!list.length){ html += `<div class="empty">Nada por acá.</div>`; }
   else{
     html += `<div class="card-list">` + list.map(x=>{
-      const paid = !!x.paidDate;
+      const inst = comInst(x), paidN = inst.filter(i=>i.paidDate).length, done = comDone(x);
       return `<div class="payment-card" data-mid="${x.id}">
-        <div class="avatar" style="font-size:.78rem;">${escapeHtml((x.lot||"?").replace(/^lote\s*/i,"").slice(0,4))}</div>
+        <div class="avatar" style="font-size:.78rem;">${escapeHtml(lotKey(x).slice(0,4)||"?")}</div>
         <div class="row-main">
-          <div class="title">${escapeHtml(/^lote/i.test(x.lot||"") ? x.lot : "Lote " + (x.lot||"?"))}</div>
-          <div class="subtitle">${projectName(x.projectId)? escapeHtml(projectName(x.projectId))+" · " : ""}${escapeHtml(x.seller||"Sin vendedor")}${paid? ` · Pagada el ${fmtDate(x.paidDate)}`:""}</div>
+          <div class="title">${escapeHtml(lotLabel(x))}${projectName(x.projectId)? ` <span style="font-weight:400;color:var(--text-muted);font-size:.75rem;">· ${escapeHtml(projectName(x.projectId))}</span>`:""}</div>
+          <div class="subtitle">${escapeHtml(x.seller||"Sin vendedor")} · ${inst.length>1 ? `${paidN}/${inst.length} cuotas` : (done?"pagada":"un pago")} · Total ${fmtMoney(x.amount)}</div>
         </div>
         <div class="row-end">
-          <div class="amount">${fmtMoney(x.amount)}</div>
-          <span class="badge ${paid?"pagado":"pendiente"}">${paid?"pagada":"por pagar"}</span>
+          ${done ? `<span class="badge pagado">pagada</span>` : `<div class="amount" style="color:var(--warn)">${fmtMoney(comPending(x))}</div><span class="badge pendiente">por pagar</span>`}
         </div>
       </div>`;
     }).join("") + `</div>`;
   }
-  // Resumen por vendedor
   const by = {};
-  list0.forEach(x=>{ const k=(x.seller||"").trim()||"Sin vendedor"; by[k]=by[k]||{lots:0,total:0,pend:0}; by[k].lots++; by[k].total+=Number(x.amount||0); if(!x.paidDate) by[k].pend+=Number(x.amount||0); });
+  list0.forEach(x=>{ const k=(x.seller||"").trim()||"Sin vendedor"; by[k]=by[k]||{lots:0,total:0,pend:0}; by[k].lots++; by[k].total+=Number(x.amount||0); by[k].pend+=comPending(x); });
   html += `<div class="section-title">Resumen por vendedor</div><div class="card-list">` + Object.keys(by).sort((a,b)=>by[b].pend-by[a].pend||a.localeCompare(b,"es")).map(k=>`
     <div class="client-card" style="cursor:default;">
       <div class="avatar">${initials(k)}</div>
@@ -796,48 +823,112 @@ function renderComisiones(){
     </div>`).join("") + `</div>`;
   main.innerHTML = html;
   main.querySelectorAll("[data-cf]").forEach(b=> b.addEventListener("click", ()=>{ comisionFilter=b.dataset.cf; renderComisiones(); }));
-  main.querySelectorAll(".payment-card").forEach(el=> el.addEventListener("click", ()=> openCommissionForm(el.dataset.mid)));
+  main.querySelectorAll(".payment-card").forEach(el=> el.addEventListener("click", ()=> openCommissionDetail(el.dataset.mid)));
+}
+function openCommissionDetail(id){
+  const x = projCommissions().find(m=>m.id===id);
+  if(!x) return;
+  // pasar comisiones viejas (un solo pago) al formato de cuotas
+  if(!Array.isArray(x.installments) || !x.installments.length){ x.installments = [{ id: uid(), amount: Number(x.amount||0), dueDate: "", paidDate: x.paidDate||"" }]; delete x.paidDate; }
+  const inst = x.installments;
+  const html = `
+    <h2>${escapeHtml(lotLabel(x))}</h2>
+    <div class="muted" style="margin-top:-6px;margin-bottom:12px;font-size:.8rem;">${projectName(x.projectId)? escapeHtml(projectName(x.projectId))+" · ":""}Vendedor: ${escapeHtml(x.seller||"—")}</div>
+    <div class="stat-grid" style="margin-bottom:12px;">
+      <div class="stat-card"><div class="label">Total</div><div class="value" style="font-size:1rem">${fmtMoney(x.amount)}</div></div>
+      <div class="stat-card ${comPending(x)>0?"warn":"ok"}"><div class="label">Falta pagar</div><div class="value" style="font-size:1rem">${fmtMoney(comPending(x))}</div></div>
+    </div>
+    <div class="card-list">
+      ${inst.map((i,n)=>`<div class="payment-card" style="cursor:default;">
+        <div class="avatar" style="font-size:.8rem;">${n+1}</div>
+        <div class="row-main">
+          <div class="title">${inst.length>1? `Cuota ${n+1}` : "Pago único"} · ${fmtMoney(i.amount)}</div>
+          <div class="subtitle">${i.paidDate? `Pagada el ${fmtDate(i.paidDate)}` : (i.dueDate? `Vence el ${fmtDate(i.dueDate)}` : "Pendiente")}</div>
+        </div>
+        <div class="row-end">
+          ${i.paidDate ? `<button class="btn ghost" data-unpay="${i.id}" style="flex:none;padding:6px 10px;font-size:.75rem;color:var(--ok);">✓ Pagada</button>`
+                       : `<button class="btn primary" data-pay="${i.id}" style="flex:none;padding:6px 10px;font-size:.75rem;">Pagar hoy</button>`}
+        </div>
+      </div>`).join("")}
+    </div>
+    ${x.notes? `<div class="muted" style="margin-top:10px;font-size:.82rem;">${escapeHtml(x.notes)}</div>`:""}
+    <div class="modal-actions" style="margin-top:14px;">
+      <button class="btn ghost" id="cmEditBtn">✏️ Editar</button>
+      <button class="btn danger" id="cmDelBtn">🗑️ Eliminar</button>
+    </div>
+    <button class="btn ghost block" id="cmCloseBtn">Cerrar</button>
+  `;
+  const close = openModal(html, true);
+  document.getElementById("cmCloseBtn").addEventListener("click", ()=>{ close(); render(); });
+  document.querySelectorAll(".modal [data-pay]").forEach(b=> b.addEventListener("click", ()=>{
+    const i = inst.find(k=>k.id===b.dataset.pay); i.paidDate = todayISO(); saveData(); close(); toast("Cuota marcada como pagada ✓"); render(); openCommissionDetail(x.id);
+  }));
+  document.querySelectorAll(".modal [data-unpay]").forEach(b=> b.addEventListener("click", ()=>{
+    openConfirm("¿Marcar como no pagada?", "La cuota vuelve a quedar pendiente.", ()=>{
+      const i = inst.find(k=>k.id===b.dataset.unpay); i.paidDate = ""; saveData(); close(); render(); openCommissionDetail(x.id);
+    });
+  }));
+  document.getElementById("cmEditBtn").addEventListener("click", ()=>{ close(); openCommissionForm(x.id); });
+  document.getElementById("cmDelBtn").addEventListener("click", ()=> openConfirm("¿Eliminar comisión?", `Se eliminará la comisión del ${lotLabel(x)} con todas sus cuotas.`, ()=>{
+    DATA.commissions = projCommissions().filter(m=>m.id!==x.id); saveData(); close(); toast("Comisión eliminada"); render();
+  }));
 }
 function openCommissionForm(id){
   const list = projCommissions();
   const editing = !!id;
-  const x = editing ? list.find(m=>m.id===id) : {projectId:(DATA.projects||[]).length===1?DATA.projects[0].id:"",lot:"",seller:"",amount:"",paidDate:"",notes:""};
+  const x = editing ? list.find(m=>m.id===id) : {projectId:(DATA.projects||[]).length===1?DATA.projects[0].id:"",lot:"",seller:"",amount:"",perInstallment:"",firstDue:"",notes:""};
   if(!x) return;
   const names = sellerNames();
   const html = `
     <h2>${editing? "Editar comisión":"Nueva comisión"}</h2>
     <div class="field"><label>Urbanización</label><select id="cm_proj"><option value="">—</option>${(DATA.projects||[]).map(pr=>`<option value="${pr.id}" ${pr.id===x.projectId?"selected":""}>${escapeHtml(pr.name)}</option>`).join("")}</select></div>
     <div class="field-row">
-      <div class="field"><label>Lote *</label><input id="cm_lot" value="${escapeAttr(x.lot||"")}" placeholder="Ej: 3"></div>
-      <div class="field"><label>Comisión (monto) *</label><input id="cm_amount" type="number" inputmode="decimal" value="${x.amount||""}" placeholder="0"></div>
+      <div class="field"><label>Lote *</label><input id="cm_lot" value="${escapeAttr(x.lot||"")}" placeholder="Ej: 1"></div>
+      <div class="field"><label>Vendedor</label><input id="cm_seller" list="cm_sellers" value="${escapeAttr(x.seller||"")}" placeholder="Ej: Gustavo"><datalist id="cm_sellers">${names.map(n=>`<option value="${escapeAttr(n)}">`).join("")}</datalist></div>
     </div>
-    <div class="field"><label>Vendedor / corredor</label><input id="cm_seller" list="cm_sellers" value="${escapeAttr(x.seller||"")}" placeholder="Ej: Carlos Benítez"><datalist id="cm_sellers">${names.map(n=>`<option value="${escapeAttr(n)}">`).join("")}</datalist></div>
-    <div class="field"><label>Fecha en que se pagó (dejar vacío si no se pagó aún)</label><input id="cm_paid" type="date" value="${x.paidDate||""}"></div>
+    <div class="field-row">
+      <div class="field"><label>Comisión total *</label><input id="cm_amount" type="number" inputmode="decimal" value="${x.amount||""}" placeholder="0"></div>
+      <div class="field"><label>Monto por cuota</label><input id="cm_per" type="number" inputmode="decimal" value="${x.perInstallment||""}" placeholder="Vacío = 1 pago"></div>
+    </div>
+    <div class="field"><label>Fecha de la 1ª cuota (opcional, las demás mes a mes)</label><input id="cm_first" type="date" value="${x.firstDue||""}"></div>
+    <div id="cm_plan" class="muted" style="font-size:.8rem;margin:-4px 0 10px;"></div>
     <div class="field"><label>Notas</label><textarea id="cm_notes" placeholder="Opcional">${escapeHtml(x.notes||"")}</textarea></div>
     <div class="modal-actions">
       <button class="btn ghost" id="cancelBtn">Cancelar</button>
       <button class="btn primary" id="saveBtn">Guardar</button>
     </div>
-    ${(editing && !x.paidDate)? `<button class="btn ghost block" id="cmPaidTodayBtn">✅ Marcar como pagada hoy</button>` : ""}
-    ${editing? `<button class="btn danger block" id="cmDelBtn">🗑️ Eliminar comisión</button>` : ""}
   `;
   const close = openModal(html, true);
+  const planEl = document.getElementById("cm_plan");
+  function updatePlan(){
+    const t = Number(document.getElementById("cm_amount").value)||0;
+    const per = Number(document.getElementById("cm_per").value)||0;
+    planEl.textContent = t>0 ? "📋 " + planText(buildInstallments(t, per)) : "";
+  }
+  ["cm_amount","cm_per"].forEach(i=> document.getElementById(i).addEventListener("input", updatePlan));
+  updatePlan();
   document.getElementById("cancelBtn").addEventListener("click", close);
   document.getElementById("saveBtn").addEventListener("click", ()=>{
     const lot = document.getElementById("cm_lot").value.trim();
     const amount = Number(document.getElementById("cm_amount").value);
+    const per = Number(document.getElementById("cm_per").value)||0;
+    const firstDue = document.getElementById("cm_first").value || "";
     if(!lot){ toast("Ingresá el lote"); return; }
     if(!amount || amount<=0){ toast("Ingresá un monto válido"); return; }
-    const data = { projectId: document.getElementById("cm_proj").value, lot, amount, seller: document.getElementById("cm_seller").value.trim(), paidDate: document.getElementById("cm_paid").value || "", notes: document.getElementById("cm_notes").value.trim() };
-    if(editing) Object.assign(x, data); else list.push({ id: uid(), ...data });
-    saveData(); close(); toast(editing? "Comisión actualizada":"Comisión agregada"); render();
+    const amounts = buildInstallments(amount, per);
+    const old = editing ? comInst(x) : [];
+    const installments = amounts.map((a,n)=>({
+      id: (old[n] && old[n].id && old[n].id!=="single") ? old[n].id : uid(),
+      amount: a,
+      dueDate: firstDue ? addMonthsISO(firstDue, n) : ((old[n]&&old[n].dueDate)||""),
+      paidDate: (old[n] && old[n].paidDate) || ""
+    }));
+    const data = { projectId: document.getElementById("cm_proj").value, lot, amount, perInstallment: per || "", firstDue, seller: document.getElementById("cm_seller").value.trim(), notes: document.getElementById("cm_notes").value.trim(), installments };
+    let target;
+    if(editing){ Object.assign(x, data); delete x.paidDate; target = x; }
+    else { target = { id: uid(), ...data }; list.push(target); }
+    saveData(); close(); toast(editing? "Comisión actualizada":"Comisión agregada"); render(); openCommissionDetail(target.id);
   });
-  const pt = document.getElementById("cmPaidTodayBtn");
-  if(pt) pt.addEventListener("click", ()=>{ x.paidDate = todayISO(); saveData(); close(); toast("Comisión marcada como pagada ✓"); render(); });
-  const del = document.getElementById("cmDelBtn");
-  if(del) del.addEventListener("click", ()=> openConfirm("¿Eliminar comisión?", "Esta acción no se puede deshacer.", ()=>{
-    DATA.commissions = list.filter(m=>m.id!==x.id); saveData(); close(); toast("Comisión eliminada"); render();
-  }));
 }
 
 function renderPagos(){
