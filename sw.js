@@ -1,4 +1,4 @@
-const CACHE_NAME = "mb-clientes-v2";
+const CACHE_NAME = "mb-clientes-v3";
 const ASSETS = ["./", "./index.html", "./manifest.json"];
 
 self.addEventListener("install", (event) => {
@@ -21,7 +21,7 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   event.respondWith(
-    fetch(event.request)
+    fetch(event.request, { cache: "no-cache" }) // revalida con el servidor: evita la copia vieja del navegador
       .then((response) => {
         if (response && response.status === 200) {
           const copy = response.clone();
