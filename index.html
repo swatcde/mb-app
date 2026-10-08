@@ -1402,12 +1402,63 @@ function openPaymentPicker(){
   });
 }
 
-function openPaymentForm(clientId, paymentId){
+const MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+function monthLabel(iso){ if(!iso) return ""; const [y,m] = iso.split("-"); return `${MESES[Number(m)-1]} ${y}`; }
+function openNewPayment(c){
+  c.payments = c.payments || [];
+  const cuotas = c.payments.filter(isCuota);
+  const pending = cuotas.filter(p=>!p.paidDate).sort((a,b)=>(a.dueDate||"9999").localeCompare(b.dueDate||"9999"));
+  let html, nextNum = 0, nextDue = "", nextAmt = "";
+  if(pending.length){
+    html = `<div class="field"><label>Mes que paga</label><select id="np_cuota">${pending.map(p=>`<option value="${p.id}">${escapeHtml(monthLabel(p.dueDate) || "Sin fecha")} · ${escapeHtml(p.description||"Cuota")}${paymentStatus(p)==="vencido"?" (vencida)":""}</option>`).join("")}</select></div>`;
+    nextAmt = pending[0].amount;
+  } else {
+    nextNum = cuotas.length + 1;
+    const last = c.payments.map(p=>p.dueDate||p.paidDate||"").filter(Boolean).sort().pop();
+    nextDue = last ? addMonthsISO(last, 1) : todayISO();
+    const lastCuota = cuotas.slice().sort((a,b)=>(a.dueDate||a.paidDate||"").localeCompare(b.dueDate||b.paidDate||"")).pop();
+    nextAmt = lastCuota ? lastCuota.amount : (c.totalProperty && c.installments ? Math.round(c.totalProperty/c.installments*100)/100 : "");
+    html = `<div class="field"><label>Mes que paga${c.installments? ` (cuota ${nextNum} de ${c.installments})`:""}</label><input id="np_month" type="month" value="${nextDue.slice(0,7)}"></div>`;
+  }
+  const close = openModal(`
+    <h2>Pago — ${escapeHtml(c.name)}</h2>
+    ${html}
+    <div class="field-row">
+      <div class="field"><label>Monto *</label><input id="np_amount" type="number" inputmode="decimal" value="${nextAmt||""}" placeholder="0"></div>
+      <div class="field"><label>Fecha de pago</label><input id="np_paid" type="date" value="${todayISO()}"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="npCancel">Cancelar</button>
+      <button class="btn primary" id="npSave">💵 Guardar pago</button>
+    </div>
+    <button class="btn ghost block" id="npOther" style="font-size:.8rem;">Otro pago (entrega, extra…)</button>`, true);
+  const sel = document.getElementById("np_cuota");
+  if(sel) sel.addEventListener("change", ()=>{ const p = pending.find(x=>x.id===sel.value); if(p) document.getElementById("np_amount").value = p.amount; });
+  document.getElementById("npCancel").addEventListener("click", close);
+  document.getElementById("npOther").addEventListener("click", ()=>{ close(); openPaymentForm(c.id, null, true); });
+  document.getElementById("npSave").addEventListener("click", ()=>{
+    const amount = Number(document.getElementById("np_amount").value);
+    if(!amount || amount<=0){ toast("Ingresá un monto válido"); return; }
+    const paid = document.getElementById("np_paid").value || todayISO();
+    if(sel){
+      const p = pending.find(x=>x.id===sel.value);
+      p.amount = amount; p.paidDate = paid;
+    } else {
+      const m = document.getElementById("np_month").value;
+      let due = paid;
+      if(m){ const [yy,mm] = m.split("-").map(Number); const dd = Math.min(Number((nextDue||todayISO()).slice(8,10)), new Date(yy, mm, 0).getDate()); due = `${m}-${String(dd).padStart(2,"0")}`; }
+      c.payments.push({ id: uid(), description: c.installments ? `Cuota ${nextNum}/${c.installments}` : `Cuota ${nextNum}`, amount, dueDate: due, paidDate: paid });
+    }
+    saveData(); close(); toast("Pago registrado ✓"); render();
+  });
+}
+function openPaymentForm(clientId, paymentId, freeForm){
   const c = getClient(clientId);
   if(!c) return;
+  if(!paymentId && !freeForm){ openNewPayment(c); return; }
   c.payments = c.payments || [];
   const editing = !!paymentId;
-  const p = editing ? c.payments.find(x=>x.id===paymentId) : {description:"",amount:"",dueDate:todayISO(),paidDate:""};
+  const p = editing ? c.payments.find(x=>x.id===paymentId) : {description:"",amount:"",dueDate:todayISO(),paidDate:todayISO()};
   const html = `
     <h2>${editing? "Editar pago":"Nuevo pago"} — ${escapeHtml(c.name)}</h2>
     <div class="field"><label>Concepto</label><input id="p_desc" value="${escapeAttr(p.description||"")}" placeholder="Ej: Cuota alquiler agosto"></div>
