@@ -888,7 +888,7 @@ function openCommissionDetail(id){
           <div class="subtitle">${i.paidDate? `Pagada el ${fmtDate(i.paidDate)}` : (i.dueDate? (i.dueDate < todayISO() ? `<span style="color:var(--danger)">Venció el ${fmtDate(i.dueDate)}</span>` : `Vence el ${fmtDate(i.dueDate)}`) : "Pendiente")}</div>
         </div>
         <div class="row-end">
-          ${i.paidDate ? `<button class="btn ghost" data-unpay="${i.id}" style="flex:none;padding:6px 10px;font-size:.75rem;color:var(--ok);">✓ Pagada</button>`
+          ${i.paidDate ? `<button class="btn ghost" data-unpay="${i.id}" style="flex:none;padding:6px 10px;font-size:.75rem;">✏️ Corregir</button>`
                        : `<button class="btn primary" data-pay="${i.id}" style="flex:none;padding:6px 12px;font-size:.75rem;">Pagar</button>`}
         </div>
       </div>`).join("")}
@@ -921,8 +921,27 @@ function openCommissionDetail(id){
     });
   }));
   document.querySelectorAll(".modal [data-unpay]").forEach(b=> b.addEventListener("click", ()=>{
-    openConfirm("¿Marcar como no pagada?", "La cuota vuelve a quedar pendiente.", ()=>{
-      const i = inst.find(k=>k.id===b.dataset.unpay); i.paidDate = ""; saveData(); close(); render(); openCommissionDetail(x.id);
+    const i = inst.find(k=>k.id===b.dataset.unpay);
+    const n = inst.indexOf(i)+1;
+    close();
+    const close2 = openModal(`
+      <h2>Corregir ${inst.length>1? `cuota ${n}` : "pago"} — ${escapeHtml(lotLabel(x))}</h2>
+      <div class="muted" style="margin-top:-6px;margin-bottom:12px;">${fmtCur(i.amount, comCur(x))} · cargada como pagada el ${fmtDate(i.paidDate)}</div>
+      <div class="field"><label>Fecha de pago correcta</label><input id="cm_fixdate" type="date" value="${i.paidDate}"></div>
+      <div class="modal-actions">
+        <button class="btn ghost" id="fixCancel">Cancelar</button>
+        <button class="btn primary" id="fixSave">Guardar fecha</button>
+      </div>
+      <button class="btn danger block" id="fixUndo">↩️ No estaba pagada (quitar pago)</button>`, true);
+    const back = ()=>{ render(); openCommissionDetail(x.id); };
+    document.getElementById("fixCancel").addEventListener("click", ()=>{ close2(); back(); });
+    document.getElementById("fixSave").addEventListener("click", ()=>{
+      const d = document.getElementById("cm_fixdate").value;
+      if(!d){ toast("Elegí una fecha"); return; }
+      i.paidDate = d; saveData(); close2(); toast("Pago corregido ✓"); back();
+    });
+    document.getElementById("fixUndo").addEventListener("click", ()=>{
+      i.paidDate = ""; saveData(); close2(); toast("Pago quitado, la cuota vuelve a pendiente"); back();
     });
   }));
   document.getElementById("cmEditBtn").addEventListener("click", ()=>{ close(); openCommissionForm(x.id); });
