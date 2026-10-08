@@ -218,6 +218,27 @@ function ensureDataShape(){
   if(!DATA.settings){ DATA.settings = { currency: "PYG", reminderDays: 3 }; changed = true; }
   if(DATA.settings.reminderDays === undefined){ DATA.settings.reminderDays = 3; changed = true; }
   if(!Array.isArray(DATA.commissions)){ DATA.commissions = []; changed = true; }
+  if(!DATA.settings.seedComGustavo2026){
+    const pr = DATA.projects.find(x=>/beirig/i.test(x.name||"")) || DATA.projects[0];
+    const FIRST = "2026-06-10", EVERY = 2;
+    const plan = [["1",4350,807],["2",4940,507],["3",5390,496],["10",4610,473],["11",4275,438]];
+    const addM = (iso,n)=>{ const [y,m,d]=iso.split("-").map(Number); const dt=new Date(y,m-1+n,d); return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`; };
+    const mk = (total, per)=>{ const out=[]; let r=total; while(r>0){ const a=Math.min(per,r); out.push(a); r-=a; } return out; };
+    plan.forEach(([lot,total,per])=>{
+      const pid = pr ? pr.id : "";
+      const existing = DATA.commissions.find(c=> (c.projectId||"")===pid && String(c.lot||"").replace(/^lote\s*/i,"")===lot);
+      if(existing){
+        // ya cargado a mano: solo completar fechas de vencimiento que falten
+        (existing.installments||[]).forEach((i,n)=>{ if(!i.dueDate) i.dueDate = addM(FIRST, n*EVERY); });
+        if(!existing.firstDue){ existing.firstDue = FIRST; existing.intervalMonths = EVERY; }
+        return;
+      }
+      DATA.commissions.push({ id: uid(), projectId: pid, currency: "USD", lot, amount: total, perInstallment: per, firstDue: FIRST, intervalMonths: EVERY, seller: "Gustavo", notes: "",
+        installments: mk(total, per).map((a,n)=>({ id: uid(), amount: a, dueDate: addM(FIRST, n*EVERY), paidDate: "" })) });
+    });
+    DATA.settings.seedComGustavo2026 = true;
+    changed = true;
+  }
   DATA.projects.forEach(pr=>{
     if(Array.isArray(pr.commissions)){
       pr.commissions.forEach(x=> DATA.commissions.push({ projectId: pr.id, ...x }));
@@ -852,7 +873,7 @@ function openCommissionDetail(id){
         <div class="avatar" style="font-size:.8rem;">${n+1}</div>
         <div class="row-main">
           <div class="title">${inst.length>1? `Cuota ${n+1}` : "Pago único"} · ${fmtCur(i.amount, comCur(x))}</div>
-          <div class="subtitle">${i.paidDate? `Pagada el ${fmtDate(i.paidDate)}` : (i.dueDate? `Vence el ${fmtDate(i.dueDate)}` : "Pendiente")}</div>
+          <div class="subtitle">${i.paidDate? `Pagada el ${fmtDate(i.paidDate)}` : (i.dueDate? (i.dueDate < todayISO() ? `<span style="color:var(--danger)">Venció el ${fmtDate(i.dueDate)}</span>` : `Vence el ${fmtDate(i.dueDate)}`) : "Pendiente")}</div>
         </div>
         <div class="row-end">
           ${i.paidDate ? `<button class="btn ghost" data-unpay="${i.id}" style="flex:none;padding:6px 10px;font-size:.75rem;color:var(--ok);">✓ Pagada</button>`
@@ -915,7 +936,10 @@ function openCommissionForm(id){
       <div class="field"><label>Comisión total *</label><input id="cm_amount" type="number" inputmode="decimal" value="${x.amount||""}" placeholder="0"></div>
       <div class="field"><label>Monto por cuota</label><input id="cm_per" type="number" inputmode="decimal" value="${x.perInstallment||""}" placeholder="Vacío = 1 pago"></div>
     </div>
-    <div class="field"><label>Fecha de la 1ª cuota (opcional, las demás mes a mes)</label><input id="cm_first" type="date" value="${x.firstDue||""}"></div>
+    <div class="field-row">
+      <div class="field"><label>Fecha de la 1ª cuota</label><input id="cm_first" type="date" value="${x.firstDue||""}"></div>
+      <div class="field"><label>Frecuencia</label><select id="cm_every">${[1,2,3,6].map(n=>`<option value="${n}" ${Number(x.intervalMonths||1)===n?"selected":""}>${n===1?"Cada mes":`Cada ${n} meses`}</option>`).join("")}</select></div>
+    </div>
     <div id="cm_plan" class="muted" style="font-size:.8rem;margin:-4px 0 10px;"></div>
     <div class="field"><label>Notas</label><textarea id="cm_notes" placeholder="Opcional">${escapeHtml(x.notes||"")}</textarea></div>
     <div class="modal-actions">
@@ -939,6 +963,7 @@ function openCommissionForm(id){
     const amount = Number(document.getElementById("cm_amount").value);
     const per = Number(document.getElementById("cm_per").value)||0;
     const firstDue = document.getElementById("cm_first").value || "";
+    const every = Number(document.getElementById("cm_every").value) || 1;
     if(!lot){ toast("Ingresá el lote"); return; }
     if(!amount || amount<=0){ toast("Ingresá un monto válido"); return; }
     const amounts = buildInstallments(amount, per);
@@ -946,10 +971,10 @@ function openCommissionForm(id){
     const installments = amounts.map((a,n)=>({
       id: (old[n] && old[n].id && old[n].id!=="single") ? old[n].id : uid(),
       amount: a,
-      dueDate: firstDue ? addMonthsISO(firstDue, n) : ((old[n]&&old[n].dueDate)||""),
+      dueDate: firstDue ? addMonthsISO(firstDue, n*every) : ((old[n]&&old[n].dueDate)||""),
       paidDate: (old[n] && old[n].paidDate) || ""
     }));
-    const data = { projectId: document.getElementById("cm_proj").value, currency: document.getElementById("cm_cur").value, lot, amount, perInstallment: per || "", firstDue, seller: document.getElementById("cm_seller").value.trim(), notes: document.getElementById("cm_notes").value.trim(), installments };
+    const data = { projectId: document.getElementById("cm_proj").value, currency: document.getElementById("cm_cur").value, lot, amount, perInstallment: per || "", firstDue, intervalMonths: every, seller: document.getElementById("cm_seller").value.trim(), notes: document.getElementById("cm_notes").value.trim(), installments };
     let target;
     if(editing){ Object.assign(x, data); delete x.paidDate; target = x; }
     else { target = { id: uid(), ...data }; list.push(target); }
