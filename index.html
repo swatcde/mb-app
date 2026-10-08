@@ -218,6 +218,7 @@ function ensureDataShape(){
   }
   if(!DATA.settings){ DATA.settings = { currency: "PYG", reminderDays: 3 }; changed = true; }
   if(DATA.settings.reminderDays === undefined){ DATA.settings.reminderDays = 3; changed = true; }
+  DATA.projects.forEach(pr=>{ if(!Array.isArray(pr.commissions)){ pr.commissions = []; changed = true; } });
   return changed;
 }
 let DATA = loadData();
@@ -510,6 +511,7 @@ fabBtn.addEventListener("click", ()=>{
   if(currentClientId){ openPaymentForm(currentClientId); return; }
   if(currentTab === "clientes" || (currentTab==="dashboard")) openClientForm();
   else if(currentTab === "pagos") openPaymentPicker();
+  else if(currentTab === "comisiones") openCommissionForm();
 });
 
 /* ---------- Render ---------- */
@@ -528,7 +530,7 @@ function render(){
   if(currentTab === "dashboard"){ headerTitle.innerHTML = backBtn + escapeHtml(currentProject().name); renderDashboard(); }
   else if(currentTab === "clientes"){ headerTitle.innerHTML = backBtn + "Clientes"; renderClientes(); }
   else if(currentTab === "pagos"){ headerTitle.innerHTML = backBtn + "Pagos"; renderPagos(); }
-  else if(currentTab === "comisiones"){ headerTitle.innerHTML = backBtn + "Comisiones"; fabBtn.style.display="none"; renderComisiones(); }
+  else if(currentTab === "comisiones"){ headerTitle.innerHTML = backBtn + "Comisiones"; renderComisiones(); }
   else if(currentTab === "config"){ headerTitle.innerHTML = backBtn + "Ajustes"; fabBtn.style.display="none"; renderConfig(); }
   const backToProjectsBtn = document.getElementById("backToProjects");
   if(backToProjectsBtn) backToProjectsBtn.addEventListener("click", ()=>{ currentView="projects"; currentProjectId=null; currentClientId=null; render(); });
@@ -601,7 +603,7 @@ function openProjectForm(id){
     if(!name){ toast("Ingresá el nombre de la urbanización"); return; }
     const totalLots = Number(document.getElementById("pr_lots").value) || 0;
     if(editing){ p.name = name; p.totalLots = totalLots; }
-    else{ DATA.projects.push({ id: uid(), name, totalLots, clients: [] }); }
+    else{ DATA.projects.push({ id: uid(), name, totalLots, clients: [], commissions: [] }); }
     saveData();
     close();
     toast(editing? "Urbanización actualizada" : "Urbanización creada");
@@ -639,7 +641,7 @@ function renderDashboard(){
     <div class="stat-card danger"><div class="label">Pagos vencidos</div><div class="value">${overdue.length}</div></div>
     <div class="stat-card warn"><div class="label">Vencen en 7 días</div><div class="value">${upcoming.length}</div></div>
     ${proj.totalLots ? `<div class="stat-card"><div class="label">Lotes disponibles</div><div class="value">${Math.max(0,proj.totalLots-proj.clients.length)} / ${proj.totalLots}</div></div>` : ""}
-    ${proj.clients.some(c=>Number(c.commission)>0) ? `<div class="stat-card warn"><div class="label">Comisiones por pagar</div><div class="value" style="font-size:1.05rem">${fmtMoney(proj.clients.filter(c=>Number(c.commission)>0 && !c.commissionPaidDate).reduce((s,c)=>s+Number(c.commission||0),0))}</div></div>` : ""}
+    ${(proj.commissions||[]).length ? `<div class="stat-card warn"><div class="label">Comisiones por pagar</div><div class="value" style="font-size:1.05rem">${fmtMoney(proj.commissions.filter(x=>!x.paidDate).reduce((s,x)=>s+Number(x.amount||0),0))}</div></div>` : ""}
     <div class="stat-card"><div class="label">Valor total de los terrenos</div><div class="value" style="font-size:1.05rem">${fmtMoney(proj.clients.reduce((s,c)=>s+Number(c.totalProperty||0),0))}</div></div>
   </div>`;
 
@@ -717,105 +719,101 @@ function renderClientes(){
   document.getElementById("clientSearch").addEventListener("input", e=> draw(e.target.value));
 }
 
-/* ---------- Comisiones ---------- */
+/* ---------- Comisiones (por lotes, independiente de clientes) ---------- */
+function projCommissions(){ const pr = currentProject(); pr.commissions = pr.commissions || []; return pr.commissions; }
 function sellerNames(){
   const set = new Set();
-  (DATA.projects||[]).forEach(pr=> (pr.clients||[]).forEach(c=>{ if(c.seller) set.add(c.seller.trim()); }));
+  (DATA.projects||[]).forEach(pr=> (pr.commissions||[]).forEach(x=>{ if(x.seller) set.add(x.seller.trim()); }));
   return [...set].filter(Boolean).sort((a,b)=>a.localeCompare(b,"es"));
 }
-let comisionFilter = "todas"; // "todas" | "pendientes" | "pagadas"
+function lotKey(x){ return (x.lot||"").replace(/^lote\s*/i,""); }
+function lotCompare(a,b){ return lotKey(a).localeCompare(lotKey(b),"es",{numeric:true}); }
+let comisionFilter = "todas";
 function renderComisiones(){
-  const proj = currentProject();
-  const withCom = (proj.clients||[]).filter(c=> c.seller || Number(c.commission)>0);
-  const total = withCom.reduce((s,c)=>s+Number(c.commission||0),0);
-  const pagado = withCom.filter(c=>c.commissionPaidDate).reduce((s,c)=>s+Number(c.commission||0),0);
+  const list0 = projCommissions();
+  const total = list0.reduce((s,x)=>s+Number(x.amount||0),0);
+  const pagado = list0.filter(x=>x.paidDate).reduce((s,x)=>s+Number(x.amount||0),0);
   let html = `<div class="stat-grid" style="margin-bottom:6px;">
     <div class="stat-card warn"><div class="label">Por pagar</div><div class="value" style="font-size:1.05rem">${fmtMoney(total-pagado)}</div></div>
     <div class="stat-card ok"><div class="label">Pagado</div><div class="value" style="font-size:1.05rem">${fmtMoney(pagado)}</div></div>
   </div>`;
-  if(!withCom.length){
-    html += `<div class="empty">Todavía no cargaste comisiones.<br>Entrá a un cliente, tocá <b>✏️ Editar</b> y completá <b>Vendedor</b> y <b>Comisión</b> para ese lote.</div>`;
-    main.innerHTML = html;
-    return;
-  }
-  // Resumen por vendedor
-  const bySeller = {};
-  withCom.forEach(c=>{
-    const k = (c.seller||"").trim() || "Sin vendedor";
-    bySeller[k] = bySeller[k] || {total:0, pend:0, lots:0};
-    bySeller[k].total += Number(c.commission||0);
-    bySeller[k].lots += 1;
-    if(!c.commissionPaidDate) bySeller[k].pend += Number(c.commission||0);
-  });
-  html += `<div class="section-title">Por vendedor<span class="count">${Object.keys(bySeller).length}</span></div><div class="card-list">`;
-  Object.keys(bySeller).sort((a,b)=>bySeller[b].pend-bySeller[a].pend || a.localeCompare(b,"es")).forEach(name=>{
-    const v = bySeller[name];
-    html += `<div class="client-card" style="cursor:default;">
-      <div class="avatar">${initials(name)}</div>
-      <div class="row-main"><div class="title">${escapeHtml(name)}</div><div class="subtitle">${v.lots} lote(s) · Total ${fmtMoney(v.total)}</div></div>
-      <div class="row-end">${v.pend>0 ? `<div class="amount" style="color:var(--warn)">${fmtMoney(v.pend)}</div><span class="badge pendiente">por pagar</span>` : `<span class="badge pagado">al día</span>`}</div>
-    </div>`;
-  });
-  html += `</div>`;
-  // Detalle por lote
   const filters = {todas:"Todas", pendientes:"Por pagar", pagadas:"Pagadas"};
-  html += `<div class="section-title">Por lote</div>
-    <div style="display:flex;gap:6px;margin-bottom:10px;">${Object.keys(filters).map(k=>`<button class="btn ${comisionFilter===k?"primary":"ghost"}" data-cf="${k}" style="flex:1;padding:7px 4px;font-size:.78rem;">${filters[k]}</button>`).join("")}</div>`;
-  const list = withCom.filter(c=> comisionFilter==="todas" || (comisionFilter==="pagadas" ? !!c.commissionPaidDate : !c.commissionPaidDate))
-    .sort((a,b)=> (!!a.commissionPaidDate - !!b.commissionPaidDate) || (a.seller||"").localeCompare(b.seller||"","es"));
+  html += `<div class="section-title">Por lotes<span class="count">${list0.length}</span></div>`;
+  if(!list0.length){
+    html += `<div class="empty">Todavía no cargaste comisiones.<br>Tocá el botón <b>+</b> para agregar la comisión de un lote.</div>`;
+    main.innerHTML = html; return;
+  }
+  html += `<div style="display:flex;gap:6px;margin-bottom:10px;">${Object.keys(filters).map(k=>`<button class="btn ${comisionFilter===k?"primary":"ghost"}" data-cf="${k}" style="flex:1;padding:7px 4px;font-size:.78rem;">${filters[k]}</button>`).join("")}</div>`;
+  const list = list0.filter(x=> comisionFilter==="todas" || (comisionFilter==="pagadas" ? !!x.paidDate : !x.paidDate)).slice().sort(lotCompare);
   if(!list.length){ html += `<div class="empty">Nada por acá.</div>`; }
   else{
-    html += `<div class="card-list">` + list.map(c=>{
-      const paid = !!c.commissionPaidDate;
-      return `<div class="payment-card" data-cid="${c.id}">
-        <div class="avatar">🤝</div>
+    html += `<div class="card-list">` + list.map(x=>{
+      const paid = !!x.paidDate;
+      return `<div class="payment-card" data-mid="${x.id}">
+        <div class="avatar" style="font-size:.78rem;">${escapeHtml((x.lot||"?").replace(/^lote\s*/i,"").slice(0,4))}</div>
         <div class="row-main">
-          <div class="title">${escapeHtml(c.property||c.name)}</div>
-          <div class="subtitle">${escapeHtml(c.seller||"Sin vendedor")} · Cliente: ${escapeHtml(c.name)}${paid? ` · Pagada el ${fmtDate(c.commissionPaidDate)}`:""}</div>
+          <div class="title">${escapeHtml(/^lote/i.test(x.lot||"") ? x.lot : "Lote " + (x.lot||"?"))}</div>
+          <div class="subtitle">${escapeHtml(x.seller||"Sin vendedor")}${paid? ` · Pagada el ${fmtDate(x.paidDate)}`:""}</div>
         </div>
         <div class="row-end">
-          <div class="amount">${fmtMoney(c.commission)}</div>
+          <div class="amount">${fmtMoney(x.amount)}</div>
           <span class="badge ${paid?"pagado":"pendiente"}">${paid?"pagada":"por pagar"}</span>
         </div>
       </div>`;
     }).join("") + `</div>`;
   }
+  // Resumen por vendedor
+  const by = {};
+  list0.forEach(x=>{ const k=(x.seller||"").trim()||"Sin vendedor"; by[k]=by[k]||{lots:0,total:0,pend:0}; by[k].lots++; by[k].total+=Number(x.amount||0); if(!x.paidDate) by[k].pend+=Number(x.amount||0); });
+  html += `<div class="section-title">Resumen por vendedor</div><div class="card-list">` + Object.keys(by).sort((a,b)=>by[b].pend-by[a].pend||a.localeCompare(b,"es")).map(k=>`
+    <div class="client-card" style="cursor:default;">
+      <div class="avatar">${initials(k)}</div>
+      <div class="row-main"><div class="title">${escapeHtml(k)}</div><div class="subtitle">${by[k].lots} lote(s) · Total ${fmtMoney(by[k].total)}</div></div>
+      <div class="row-end">${by[k].pend>0 ? `<div class="amount" style="color:var(--warn)">${fmtMoney(by[k].pend)}</div><span class="badge pendiente">por pagar</span>` : `<span class="badge pagado">al día</span>`}</div>
+    </div>`).join("") + `</div>`;
   main.innerHTML = html;
-  main.querySelectorAll("[data-cf]").forEach(b=> b.addEventListener("click", ()=>{ comisionFilter = b.dataset.cf; renderComisiones(); }));
-  main.querySelectorAll(".payment-card").forEach(el=> el.addEventListener("click", ()=> openCommissionForm(el.dataset.cid)));
+  main.querySelectorAll("[data-cf]").forEach(b=> b.addEventListener("click", ()=>{ comisionFilter=b.dataset.cf; renderComisiones(); }));
+  main.querySelectorAll(".payment-card").forEach(el=> el.addEventListener("click", ()=> openCommissionForm(el.dataset.mid)));
 }
-function openCommissionForm(clientId){
-  const c = getClient(clientId);
-  if(!c) return;
+function openCommissionForm(id){
+  const list = projCommissions();
+  const editing = !!id;
+  const x = editing ? list.find(m=>m.id===id) : {lot:"",seller:"",amount:"",paidDate:"",notes:""};
+  if(!x) return;
   const names = sellerNames();
   const html = `
-    <h2>Comisión — ${escapeHtml(c.property||c.name)}</h2>
-    <div class="muted" style="margin-top:-6px;margin-bottom:12px;font-size:.8rem;">Cliente: ${escapeHtml(c.name)}</div>
-    <div class="field"><label>Vendedor / corredor</label><input id="cm_seller" list="cm_sellers" value="${escapeAttr(c.seller||"")}" placeholder="Ej: Carlos Benítez"><datalist id="cm_sellers">${names.map(n=>`<option value="${escapeAttr(n)}">`).join("")}</datalist></div>
+    <h2>${editing? "Editar comisión":"Nueva comisión"}</h2>
     <div class="field-row">
-      <div class="field"><label>Comisión (monto)</label><input id="cm_amount" type="number" inputmode="decimal" value="${c.commission||""}" placeholder="0"></div>
-      <div class="field"><label>Fecha en que se pagó</label><input id="cm_paid" type="date" value="${c.commissionPaidDate||""}"></div>
+      <div class="field"><label>Lote *</label><input id="cm_lot" value="${escapeAttr(x.lot||"")}" placeholder="Ej: 3"></div>
+      <div class="field"><label>Comisión (monto) *</label><input id="cm_amount" type="number" inputmode="decimal" value="${x.amount||""}" placeholder="0"></div>
     </div>
-    <div class="muted" style="font-size:.75rem;margin-bottom:10px;">Dejá la fecha vacía si todavía no le pagaste al vendedor.</div>
+    <div class="field"><label>Vendedor / corredor</label><input id="cm_seller" list="cm_sellers" value="${escapeAttr(x.seller||"")}" placeholder="Ej: Carlos Benítez"><datalist id="cm_sellers">${names.map(n=>`<option value="${escapeAttr(n)}">`).join("")}</datalist></div>
+    <div class="field"><label>Fecha en que se pagó (dejar vacío si no se pagó aún)</label><input id="cm_paid" type="date" value="${x.paidDate||""}"></div>
+    <div class="field"><label>Notas</label><textarea id="cm_notes" placeholder="Opcional">${escapeHtml(x.notes||"")}</textarea></div>
     <div class="modal-actions">
       <button class="btn ghost" id="cancelBtn">Cancelar</button>
       <button class="btn primary" id="saveBtn">Guardar</button>
     </div>
-    ${(!c.commissionPaidDate && Number(c.commission)>0)? `<button class="btn ghost block" id="cmPaidTodayBtn">✅ Marcar comisión pagada hoy</button>` : ""}
-    ${c.commissionPaidDate? `<button class="btn ghost block" id="cmUnpayBtn">↩️ Marcar como no pagada</button>` : ""}
+    ${(editing && !x.paidDate)? `<button class="btn ghost block" id="cmPaidTodayBtn">✅ Marcar como pagada hoy</button>` : ""}
+    ${editing? `<button class="btn danger block" id="cmDelBtn">🗑️ Eliminar comisión</button>` : ""}
   `;
   const close = openModal(html, true);
   document.getElementById("cancelBtn").addEventListener("click", close);
   document.getElementById("saveBtn").addEventListener("click", ()=>{
-    c.seller = document.getElementById("cm_seller").value.trim();
-    c.commission = Number(document.getElementById("cm_amount").value) || 0;
-    c.commissionPaidDate = document.getElementById("cm_paid").value || "";
-    saveData(); close(); toast("Comisión guardada"); render();
+    const lot = document.getElementById("cm_lot").value.trim();
+    const amount = Number(document.getElementById("cm_amount").value);
+    if(!lot){ toast("Ingresá el lote"); return; }
+    if(!amount || amount<=0){ toast("Ingresá un monto válido"); return; }
+    const data = { lot, amount, seller: document.getElementById("cm_seller").value.trim(), paidDate: document.getElementById("cm_paid").value || "", notes: document.getElementById("cm_notes").value.trim() };
+    if(editing) Object.assign(x, data); else list.push({ id: uid(), ...data });
+    saveData(); close(); toast(editing? "Comisión actualizada":"Comisión agregada"); render();
   });
   const pt = document.getElementById("cmPaidTodayBtn");
-  if(pt) pt.addEventListener("click", ()=>{ c.commissionPaidDate = todayISO(); saveData(); close(); toast("Comisión marcada como pagada ✓"); render(); });
-  const up = document.getElementById("cmUnpayBtn");
-  if(up) up.addEventListener("click", ()=>{ c.commissionPaidDate = ""; saveData(); close(); toast("Comisión marcada como no pagada"); render(); });
+  if(pt) pt.addEventListener("click", ()=>{ x.paidDate = todayISO(); saveData(); close(); toast("Comisión marcada como pagada ✓"); render(); });
+  const del = document.getElementById("cmDelBtn");
+  if(del) del.addEventListener("click", ()=> openConfirm("¿Eliminar comisión?", "Esta acción no se puede deshacer.", ()=>{
+    currentProject().commissions = list.filter(m=>m.id!==x.id); saveData(); close(); toast("Comisión eliminada"); render();
+  }));
 }
 
 function renderPagos(){
@@ -990,11 +988,6 @@ function renderClientDetail(id){
       ${c.installments ? `<div class="stat-card"><div class="label">Cuotas</div><div class="value" style="font-size:1.05rem">${(c.payments||[]).filter(p=>paymentStatus(p)==="pagado").length} / ${c.installments}${c.totalProperty ? ` <span style="font-size:.65rem;color:var(--text-muted);font-weight:400;">(${fmtMoney(c.totalProperty/c.installments)} c/u)</span>`:""}</div></div>` : ""}
       ${c.totalProperty ? `<div class="stat-card danger"><div class="label">Saldo pendiente</div><div class="value" style="font-size:1.05rem">${fmtMoney(Math.max(0, c.totalProperty - (c.payments||[]).filter(p=>paymentStatus(p)==="pagado").reduce((s,p)=>s+Number(p.amount||0),0)))}</div></div>` : ""}
     </div>` : ""}
-    <div class="settings-row" id="commissionRow" style="margin-top:12px;border-top:1px solid var(--border);border-bottom:none;cursor:pointer;">
-      <div><div class="lbl">🤝 Comisión${c.seller? ` · ${escapeHtml(c.seller)}`:""}</div>
-      <div class="desc">${Number(c.commission)>0 ? `${fmtMoney(c.commission)} · ${c.commissionPaidDate? `pagada el ${fmtDate(c.commissionPaidDate)}` : "por pagar"}` : "Sin comisión cargada — tocá para agregar"}</div></div>
-      ${Number(c.commission)>0 ? `<span class="badge ${c.commissionPaidDate?"pagado":"pendiente"}">${c.commissionPaidDate?"pagada":"por pagar"}</span>` : `<span style="color:var(--text-muted);">›</span>`}
-    </div>
     ${c.notes? `<div class="muted" style="margin-top:12px;">${escapeHtml(c.notes)}</div>` : ""}
     <div class="modal-actions" style="margin-top:14px;">
       <button class="btn ghost" id="editClientBtn">✏️ Editar</button>
@@ -1025,7 +1018,6 @@ function renderClientDetail(id){
   main.innerHTML = html;
   document.getElementById("backBtn").addEventListener("click", ()=>{ currentClientId=null; render(); });
   document.getElementById("editClientBtn").addEventListener("click", ()=> openClientForm(c.id));
-  document.getElementById("commissionRow").addEventListener("click", ()=> openCommissionForm(c.id));
   document.getElementById("deleteClientBtn").addEventListener("click", ()=>{
     openConfirm("¿Eliminar cliente?", `Se eliminará a ${c.name} y todos sus pagos.`, ()=>{
       currentProject().clients = currentProject().clients.filter(x=>x.id!==c.id);
@@ -1060,10 +1052,6 @@ function openClientForm(id){
       <div class="field"><label>Total del inmueble</label><input id="f_total" type="number" inputmode="decimal" value="${c.totalProperty||""}" placeholder="0"></div>
       <div class="field"><label>Cantidad de cuotas</label><input id="f_installments" type="number" inputmode="numeric" value="${c.installments||""}" placeholder="Ej: 12"></div>
     </div>
-    <div class="field-row">
-      <div class="field"><label>Vendedor / corredor</label><input id="f_seller" list="f_sellers" value="${escapeAttr(c.seller||"")}" placeholder="Ej: Carlos Benítez"><datalist id="f_sellers">${sellerNames().map(n=>`<option value="${escapeAttr(n)}">`).join("")}</datalist></div>
-      <div class="field"><label>Comisión (monto)</label><input id="f_commission" type="number" inputmode="decimal" value="${c.commission||""}" placeholder="0"></div>
-    </div>
     <div class="field"><label>Notas</label><textarea id="f_notes" placeholder="Detalles del contrato, condiciones, etc.">${escapeHtml(c.notes||"")}</textarea></div>
     <div class="modal-actions">
       <button class="btn ghost" id="cancelBtn">Cancelar</button>
@@ -1085,8 +1073,6 @@ function openClientForm(id){
       totalProperty: Number(document.getElementById("f_total").value) || 0,
       installments: Number(document.getElementById("f_installments").value) || 0,
       notes: document.getElementById("f_notes").value.trim(),
-      seller: document.getElementById("f_seller").value.trim(),
-      commission: Number(document.getElementById("f_commission").value) || 0,
     };
     if(editing){
       Object.assign(c, data);
