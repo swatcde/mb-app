@@ -1194,8 +1194,8 @@ function renderClientDetail(id){
 
   html += `<div class="section-title">Cuotas y pagos<span class="count">${pendCount} pendiente(s)</span></div>`;
   const missing = Number(c.installments||0) - (c.payments||[]).length;
-  if(missing > 0){
-    html += `<button class="btn primary block" id="genCuotasBtn" style="margin:0 0 10px;">📅 Cargar las ${missing} cuota(s) que faltan</button>`;
+  if(!Number(c.installments) || missing > 0){
+    html += `<button class="btn primary block" id="genCuotasBtn" style="margin:0 0 10px;">📅 ${Number(c.installments) ? `Cargar las ${missing} cuota(s) que faltan` : "Cargar todas las cuotas"}</button>`;
   }
   if(!payments.length){ html += `<div class="empty">Este cliente no tiene pagos cargados. Tocá + para agregar el primero.</div>`; }
   else{
@@ -1264,17 +1264,20 @@ function openClientPayDate(clientId, payId, fixing){
 function openGenerateCuotas(clientId){
   const c = getClient(clientId); if(!c) return;
   c.payments = c.payments || [];
-  const N = Number(c.installments||0);
+  const askN = !Number(c.installments);
+  let N = Number(c.installments||0);
   const have = c.payments.length;
-  const count = N - have;
+  if(askN) N = have + 1;
+  let count = N - have;
   if(count <= 0) return;
   const loaded = c.payments.reduce((s,p)=>s+Number(p.amount||0),0);
   const rest = Math.max(0, Number(c.totalProperty||0) - loaded);
-  const per0 = rest ? Math.round(rest/count) : (N && c.totalProperty ? Math.round(c.totalProperty/N) : 0);
+  const per0 = askN ? 0 : rest ? Math.round(rest/count) : (N && c.totalProperty ? Math.round(c.totalProperty/N) : 0);
   const lastDue = c.payments.map(p=>p.dueDate||p.paidDate||"").filter(Boolean).sort().pop();
   const close = openModal(`
     <h2>Cargar cuotas — ${escapeHtml(c.name)}</h2>
-    <div class="muted" style="margin-top:-6px;margin-bottom:12px;font-size:.82rem;">Ya hay ${have} de ${N} cuota(s) cargada(s). Se van a agregar las ${count} que faltan como pendientes.${c.totalProperty? ` Saldo sin cargar: ${fmtMoney(rest)}.`:""}</div>
+    ${askN ? `<div class="field"><label>Cantidad total de cuotas del cliente *</label><input id="gc_n" type="number" inputmode="numeric" placeholder="Ej: 60"></div>` : ""}
+    <div class="muted" id="gc_info" style="margin-top:-6px;margin-bottom:12px;font-size:.82rem;">${askN ? `Ya hay ${have} pago(s) cargado(s).` : `Ya hay ${have} de ${N} cuota(s) cargada(s).`} Se van a agregar las ${count} que faltan como pendientes.${c.totalProperty? ` Saldo sin cargar: ${fmtMoney(rest)}.`:""}</div>
     <div class="field-row">
       <div class="field"><label>Monto de cada cuota *</label><input id="gc_amount" type="number" inputmode="decimal" value="${per0||""}"></div>
       <div class="field"><label>Frecuencia</label><select id="gc_every">${[1,2,3,6].map(n=>`<option value="${n}">${n===1?"Cada mes":`Cada ${n} meses`}</option>`).join("")}</select></div>
@@ -1286,7 +1289,14 @@ function openGenerateCuotas(clientId){
       <button class="btn ghost" id="gcCancel">Cancelar</button>
       <button class="btn primary" id="gcOk">Cargar cuotas</button>
     </div>`, true);
+  function readN(){
+    if(!askN) return;
+    const v = Number((document.getElementById("gc_n")||{}).value)||0;
+    N = v; count = Math.max(0, N - have);
+  }
   function amounts(){
+    readN();
+    if(count<=0) return [];
     const per = Number(document.getElementById("gc_amount").value)||0;
     const arr = Array(count).fill(per);
     if(document.getElementById("gc_adjust").checked && c.totalProperty){
@@ -1297,16 +1307,19 @@ function openGenerateCuotas(clientId){
   }
   function upd(){
     const a = amounts();
+    if(!a.length){ document.getElementById("gc_plan").textContent = askN ? "Poné la cantidad total de cuotas (mayor a los pagos ya cargados)." : ""; return; }
     const diff = a[a.length-1] !== a[0];
     document.getElementById("gc_plan").textContent = a[0] ? `📋 Cuotas ${have+1} a ${N}: ${diff? `${count-1} de ${fmtMoney(a[0])} y la última de ${fmtMoney(a[a.length-1])}` : `${count} de ${fmtMoney(a[0])}`}` : "";
   }
-  ["gc_amount","gc_adjust"].forEach(i=> document.getElementById(i).addEventListener("input", upd));
+  ["gc_amount","gc_adjust"].concat(askN?["gc_n"]:[]).forEach(i=> document.getElementById(i).addEventListener("input", upd));
   document.getElementById("gc_adjust").addEventListener("change", upd);
   upd();
   document.getElementById("gcCancel").addEventListener("click", close);
   document.getElementById("gcOk").addEventListener("click", ()=>{
     const a = amounts();
+    if(!a.length){ toast("Ingresá la cantidad total de cuotas"); return; }
     if(!a[0] || a[0] <= 0){ toast("Ingresá el monto de la cuota"); return; }
+    if(askN) c.installments = N;
     const first = document.getElementById("gc_first").value || todayISO();
     const every = Number(document.getElementById("gc_every").value)||1;
     a.forEach((amt,k)=> c.payments.push({ id: uid(), description: `Cuota ${have+k+1}/${N}`, amount: amt, dueDate: addMonthsISO(first, k*every), paidDate: "" }));
